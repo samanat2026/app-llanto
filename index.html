@@ -445,9 +445,38 @@ function restoreEvent(snap) {
   if (i >= 0) D.events[i] = snap; else D.events.push(snap);
   persist('events', snap);
 }
+const RESUME_MIN = 20;
+const recentBreast = () => D.events.filter(e => e.type === 'feed' && e.mode === 'breast' && e.end && now() - e.end < RESUME_MIN * 60000).sort((a, b) => b.end - a.end)[0];
+function resumeFeed(id) {
+  const x = D.events.find(e => e.id === id); if (!x || !x.end) return;
+  const snap = clean(x);
+  x.pauses = x.pauses || []; x.pauses.push({ t0: x.end, t1: now() });
+  x.end = null; delete x.mins; persist('events', x);
+  // El "se durmió" del final fue solo una microsiesta: se quita
+  const s = last(['sleep', 'wake']);
+  const removed = s && s.type === 'sleep' && s.t >= snap.end - 60000 ? s : null;
+  if (removed) removeEvent(removed.id);
+  render();
+  toast(`↩ Sigue la misma toma${removed ? ' · quité el "se durmió"' : ''}`, [{ t: 'Deshacer', fn: () => {
+    restoreEvent(snap); if (removed) { D.events.push(removed); persist('events', removed); } render();
+  } }]);
+}
 function renderBanner() {
   const el = $('feedBanner'), f = ongoingFeed();
-  if (!f) { el.innerHTML = ''; el.dataset.k = ''; return; }
+  if (!f) {
+    // Después de terminar: durante 20 min se ofrece seguir la misma toma (no hay que decidir antes)
+    const r = recentBreast();
+    if (!r) { el.innerHTML = ''; el.dataset.k = ''; return; }
+    const ago = Math.floor(mins(r.end)), k = 'r' + r.id + ago;
+    if (el.dataset.k === k) return;
+    el.dataset.k = k;
+    el.innerHTML = `<div class="banner paused">
+      <span>🤱 Tomó ${r.mins} min · terminó hace ${ago < 1 ? 'menos de 1 min' : ago + ' min'}<br>
+      <small style="color:var(--mut)">¿Volvió a buscar el pecho? Se suma a esta misma toma (${RESUME_MIN - ago} min más para decidir)</small></span>
+      <div class="bgrid" style="grid-template-columns:1fr"><button class="stop" id="fbResume">↩ Volvió a tomar</button></div></div>`;
+    $('fbResume').onclick = () => resumeFeed(r.id);
+    return;
+  }
   const cur = f.segs[f.segs.length - 1], other = cur.s === 'izq' ? 'der' : 'izq', paused = pausedNow(f);
   const k = f.id + cur.s + (paused ? 'p' : '');
   if (el.dataset.k !== k) {
@@ -455,17 +484,10 @@ function renderBanner() {
     el.innerHTML = `<div class="banner ${paused ? 'paused' : ''}">
       <span>🤱 Pecho ${SIDE[cur.s]}${cloud && f.by ? ' · ' + esc(f.by) : ''}${paused ? ' · <b style="font-size:14px;color:var(--warn)">en pausa</b>' : ''}<br><b id="fbTime"></b></span>
       <div class="bgrid">
-        <button id="fbPause">${paused ? '▶ Volvió a tomar' : '⏸ Pausa (se soltó)'}</button>
-        <button id="fbSwitch">Cambiar a ${SIDE[other]}</button>
-        <button id="fbSleep">😴 Se durmió</button>
-        <button class="stop" id="fbStop">Terminar</button>
+        <button id="fbSwitch" style="grid-column:1/-1">Cambiar a ${SIDE[other]}</button>
+        <button id="fbSleep">😴 Se soltó / se durmió</button>
+        <button class="stop" id="fbStop">Terminó despierta</button>
       </div></div>`;
-    $('fbPause').onclick = () => {
-      const x = ongoingFeed(); if (!x) return;
-      x.pauses = x.pauses || [];
-      if (pausedNow(x)) x.pauses[x.pauses.length - 1].t1 = now(); else x.pauses.push({ t0: now(), t1: null });
-      persist('events', x); renderBanner();
-    };
     $('fbSwitch').onclick = () => {
       const x = ongoingFeed(); if (!x) return;
       if (pausedNow(x)) x.pauses[x.pauses.length - 1].t1 = now();
@@ -486,7 +508,7 @@ function renderBanner() {
   const sec = Math.floor(activeMs(f) / 1000);
   $('fbTime').textContent = `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
 }
-setInterval(() => { if (!$('app').hidden && ongoingFeed()) renderBanner(); }, 1000);
+setInterval(() => { if (!$('app').hidden && (ongoingFeed() || $('feedBanner').dataset.k)) renderBanner(); }, 1000);
 
 let feedMode = lsGet('llanto.feedMode') || 'breast';
 function openFeedSheet() {
@@ -496,7 +518,7 @@ function openFeedSheet() {
   const sh = $('sheet');
   const close = () => { sh.hidden = true; sh.innerHTML = ''; };
   // Toma de pecho que terminó hace menos de 20 min: se puede continuar como la misma toma
-  const rf = D.events.filter(e => e.type === 'feed' && e.mode === 'breast' && e.end && now() - e.end < 20 * 60000).sort((a, b) => b.end - a.end)[0];
+  const rf = recentBreast();
   const draw = () => {
     sh.innerHTML = `<div class="sheet">
       ${rf ? `<button class="resume" id="resumeFeed">↩ <b>Seguir la toma de hace ${fmt(mins(rf.end))}</b> (${rf.mins} min)
@@ -540,21 +562,7 @@ function openFeedSheet() {
       quickLog('feed', `🍼 Tetero ${b.dataset.oz} oz`, { mode: 'bottle', oz: +b.dataset.oz });
     });
     const rb = $('resumeFeed');
-    if (rb) rb.onclick = () => {
-      close();
-      const x = D.events.find(e => e.id === rf.id); if (!x) return;
-      const snap = clean(x);
-      x.pauses = x.pauses || []; x.pauses.push({ t0: x.end, t1: now() });
-      x.end = null; delete x.mins; persist('events', x);
-      // Si se registró "se durmió" al terminar, fue solo una microsiesta: se quita
-      const s = last(['sleep', 'wake']);
-      const removed = s && s.type === 'sleep' && s.t >= snap.end - 60000 ? s : null;
-      if (removed) removeEvent(removed.id);
-      render();
-      toast(`↩ Toma reanudada${removed ? ' · quité el "se durmió"' : ''}`, [{ t: 'Deshacer', fn: () => {
-        restoreEvent(snap); if (removed) { D.events.push(removed); persist('events', removed); } render();
-      } }]);
-    };
+    if (rb) rb.onclick = () => { close(); resumeFeed(rf.id); };
     $('plainFeed').onclick = () => { close(); quickLog('feed', '🍼 Comió'); };
     $('closeSheet').onclick = close;
   };
