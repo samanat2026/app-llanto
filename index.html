@@ -90,6 +90,21 @@
   .bgrid .stop{background:var(--ok);color:#111;font-weight:600}
   .resume{width:100%;background:#2d2a40;border:1px solid var(--ok);border-radius:16px;padding:14px;font-size:16px;margin-bottom:12px;text-align:left}
   .resume small{display:block;color:var(--mut);font-size:12px;margin-top:2px}
+  #tour{position:fixed;inset:0;z-index:20}
+  #tour .spot{position:fixed;border-radius:18px;box-shadow:0 0 0 9999px rgba(10,8,16,.8);transition:all .25s ease;pointer-events:none}
+  #tour .bubble{position:fixed;left:16px;right:16px;max-width:488px;margin:0 auto;background:#fff;color:#1b1726;border-radius:18px;padding:16px;box-shadow:0 10px 30px #0009}
+  #tour .bubble p{margin:0 0 14px;font-size:16px;line-height:1.45}
+  #tour .bubble::after{content:"";position:absolute;left:var(--ax,50%);width:16px;height:16px;background:#fff;transform:translateX(-50%) rotate(45deg)}
+  #tour .bubble.up::after{top:-7px}
+  #tour .bubble.down::after{bottom:-7px}
+  #tour .bubble.center{top:50%!important;transform:translateY(-50%)}
+  #tour .bubble.center::after{display:none}
+  .tnav{display:flex;align-items:center;gap:6px}
+  .tdots{flex:1;display:flex;gap:5px}
+  .tdots i{width:7px;height:7px;border-radius:50%;background:#d8d2e4}
+  .tdots i.on{background:#c45ad8}
+  .tskip{background:none;color:#7a7390!important;padding:10px;font-size:15px}
+  .tnext{background:linear-gradient(160deg,#ff7aa8,#c45ad8);color:#fff!important;border-radius:12px;padding:11px 18px;font-weight:600;font-size:15px}
   [hidden]{display:none!important}
 </style>
 </head>
@@ -696,6 +711,7 @@ $('menuBtn').onclick = () => {
     <p>Aciertos de la sugerencia: <b>${lab.length ? Math.round(hits / lab.length * 100) + '%' : '—'}</b> (${hits}/${lab.length})</p>
     <p>Suele comer cada <b>${fmt(feedInterval())}</b> · aguanta despierta <b>~${fmt(wakeWindow())}</b></p>
     <div class="row">
+      <button id="tourBtn">❓ Ver tutorial</button>
       <button id="expBtn">⬇️ Descargar respaldo</button>
       <label>⬆️ Restaurar<input type="file" id="impIn" accept="application/json" hidden></label>
       <button id="wipeBtn" class="danger">Borrar todo</button>
@@ -704,6 +720,7 @@ $('menuBtn').onclick = () => {
     <p class="note">Es una ayuda, no un diagnóstico. Llanto muy agudo, que no se calma con nada, fiebre, rechazo a comer o decaimiento: llama al pediatra.</p>`;
   m.hidden = false; wipeArmed = false;
   if ($('leaveBtn')) $('leaveBtn').onclick = () => { lsSet('llanto.fam', null); location.href = location.pathname; };
+  $('tourBtn').onclick = startTour;
   $('expBtn').onclick = () => {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(D)], { type: 'application/json' }));
@@ -733,7 +750,60 @@ function genCode() {
   const s = Array.from(r, x => A[x % A.length]).join('');
   return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8, 12)}`;
 }
-function showApp() { $('setup').hidden = true; $('app').hidden = false; render(); }
+function showApp() {
+  $('setup').hidden = true; $('app').hidden = false; render();
+  if (!lsGet('llanto.tour')) setTimeout(startTour, 500);
+}
+
+/* ====== Tutorial con globitos (solo la primera vez) ====== */
+const TOUR = [
+  { t: '👋 <b>¡Bienvenida!</b> Te muestro en 30 segundos cómo funciona la app. Todo se registra con un solo toque.' },
+  { el: '#status', t: '<b>De un vistazo:</b> hace cuánto comió, cuánto lleva despierta y cuándo fue el último pañal. Se pone <b style="color:#c99a1a">amarillo</b> cuando ya le toca.' },
+  { el: '#cryBtn', t: '<b>Cuando llore,</b> toca aquí y acerca el celular a ella unos segundos. Te digo la causa más probable: hambre, sueño, pañal, frío/calor u otra.' },
+  { el: '[data-ev=feed]', t: '<b>Cuando coma,</b> toca aquí. Eliges <b>pecho</b> (con cronómetro y lado) o <b>tetero</b> (tocas las onzas).' },
+  { el: '#sleepBtn', t: '<b>Cuando se duerma</b> toca aquí, y <b>cuando se despierte</b> vuelves a tocar el mismo botón.' },
+  { el: '[data-ev=diaper]', t: '<b>Cada cambio de pañal,</b> un toque aquí.' },
+  { el: '#menuBtn', t: '<b>Menú:</b> resumen del día, invitar a la familia por WhatsApp, respaldo y ver este tutorial otra vez.' },
+  { t: '⭐ <b>Lo más importante:</b> después de que llore, cuando logres calmarla, marca <b>qué funcionó</b>. Con cada respuesta la app aprende a reconocer sus llantos.<br><br>¿Te equivocaste en algo? Siempre aparece <b>Deshacer</b> abajo.' }
+];
+function startTour() {
+  if ($('tour') || $('app').hidden) return;
+  $('menu').hidden = true;
+  let i = 0;
+  const ov = document.createElement('div'); ov.id = 'tour';
+  ov.innerHTML = `<div class="spot"></div><div class="bubble"><p></p>
+    <div class="tnav"><span class="tdots">${TOUR.map(() => '<i></i>').join('')}</span>
+    <button class="tskip">Omitir</button><button class="tnext">Siguiente</button></div></div>`;
+  document.body.appendChild(ov);
+  const spot = ov.querySelector('.spot'), bub = ov.querySelector('.bubble');
+  const end = () => { lsSet('llanto.tour', '1'); ov.remove(); window.removeEventListener('resize', place); };
+  function place() {
+    const s = TOUR[i], el = s.el ? document.querySelector(s.el) : null, last = i === TOUR.length - 1;
+    bub.querySelector('p').innerHTML = s.t;
+    ov.querySelectorAll('.tdots i').forEach((d, k) => d.classList.toggle('on', k === i));
+    ov.querySelector('.tnext').textContent = last ? '¡Entendido!' : 'Siguiente';
+    ov.querySelector('.tskip').style.visibility = last ? 'hidden' : 'visible';
+    bub.classList.remove('up', 'down', 'center'); bub.style.top = bub.style.bottom = '';
+    if (!el) {
+      Object.assign(spot.style, { left: '50%', top: '50%', width: '0', height: '0' });
+      bub.classList.add('center'); return;
+    }
+    el.scrollIntoView({ block: 'center' });
+    requestAnimationFrame(() => {
+      const r = el.getBoundingClientRect(), pad = 6;
+      Object.assign(spot.style, { left: r.left - pad + 'px', top: r.top - pad + 'px', width: r.width + pad * 2 + 'px', height: r.height + pad * 2 + 'px' });
+      const below = r.bottom + 200 < innerHeight;
+      if (below) { bub.classList.add('up'); bub.style.top = r.bottom + pad + 14 + 'px'; }
+      else { bub.classList.add('down'); bub.style.bottom = innerHeight - r.top + pad + 14 + 'px'; }
+      const b = bub.getBoundingClientRect();
+      bub.style.setProperty('--ax', clip(r.left + r.width / 2 - b.left, 24, b.width - 24) + 'px');
+    });
+  }
+  ov.querySelector('.tnext').onclick = () => { if (i === TOUR.length - 1) end(); else { i++; place(); } };
+  ov.querySelector('.tskip').onclick = end;
+  window.addEventListener('resize', place);
+  place();
+}
 
 async function start() {
   if (!CFG) { showApp(); return; }                 // sin Firebase: modo local
