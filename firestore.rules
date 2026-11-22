@@ -2,15 +2,35 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /families/{fam} {
-      // Cada cuidador se registra como miembro al entrar con el código
-      match /members/{uid} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+      function isMember() {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/families/$(fam)/members/$(request.auth.uid));
       }
+      function isOwner() {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/families/$(fam))
+          && get(/databases/$(database)/documents/families/$(fam)).data.owner == request.auth.uid;
+      }
+
+      // Datos de la familia: quién es la administradora (la mamá).
+      // Se crea una sola vez y nadie puede cambiarlo desde la app.
+      allow get: if isMember();
+      allow create: if isMember()
+        && request.resource.data.keys().hasOnly(['owner', 't'])
+        && request.resource.data.owner == request.auth.uid;
+
+      // Cada cuidador escribe solo su propio registro (nombre y última vez que entró).
+      // Solo la administradora puede ver la lista de todos.
+      match /members/{uid} {
+        allow write: if request.auth != null && request.auth.uid == uid;
+        allow read: if (request.auth != null && request.auth.uid == uid) || isOwner();
+      }
+
       // Solo los miembros de esa familia leen y escriben sus datos
       match /{col}/{id} {
         allow read, write: if request.auth != null
           && col in ['events', 'cries']
-          && exists(/databases/$(database)/documents/families/$(fam)/members/$(request.auth.uid));
+          && isMember();
       }
     }
   }

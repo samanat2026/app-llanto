@@ -70,6 +70,13 @@
   .big{width:100%;padding:16px;border-radius:16px;font-size:17px;font-weight:600;background:linear-gradient(160deg,#ff7aa8,#c45ad8);color:#fff}
   .big.alt{background:var(--card2)}
   .or{text-align:center;color:var(--mut);margin:16px 0;font-size:13px}
+  .who{display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid #ffffff10}
+  .who .dot{width:11px;height:11px;border-radius:50%;background:#55506a;flex:none}
+  .who .dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  .who div{flex:1}
+  .who b{display:block;font-size:16px}
+  .who small{color:var(--mut);font-size:13px}
+  .who .on-t{color:var(--ok)}
   code.fam{font-size:18px;letter-spacing:1px;color:var(--ok)}
   #toast{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 14px);max-width:496px;margin:0 auto;background:#3a3550;border-radius:16px;
          padding:12px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;box-shadow:0 8px 24px #0008;font-size:15px;z-index:9}
@@ -265,8 +272,26 @@ async function initCloud(code) {
     }
   };
   // Registrarse como miembro de la familia (lo exigen las reglas de seguridad)
-  const member = F.setDoc(F.doc(db, 'families', code, 'members', auth.currentUser.uid), { name: ME, t: now() }, { merge: true });
+  const MY = auth.currentUser.uid;
+  const myDoc = F.doc(db, 'families', code, 'members', MY);
+  const famDoc = F.doc(db, 'families', code);
+  const member = F.setDoc(myDoc, { name: ME, t: now(), seen: now(), on: !document.hidden }, { merge: true });
   await Promise.race([member, new Promise(r => setTimeout(r, 5000))]).catch(fail);
+  cloud.uid = MY;
+  cloud.owner = undefined;          // undefined = aún no se sabe · null = sin administradora
+  // Presencia: avisa que está en la app al abrir, cada minuto mientras esté abierta y al salir
+  const ping = on => F.setDoc(myDoc, { name: ME, seen: now(), on }, { merge: true }).catch(() => {});
+  setInterval(() => { if (!document.hidden) ping(true); }, 60000);
+  document.addEventListener('visibilitychange', () => ping(!document.hidden));
+  window.addEventListener('pagehide', () => ping(false));
+  // Quién es la administradora (la mamá)
+  const watchFam = (tries = 0) => F.onSnapshot(famDoc,
+    snap => { cloud.owner = snap.exists() ? snap.data().owner : null; },
+    err => { console.error(err); if (tries < 5) setTimeout(() => watchFam(tries + 1), 4000); });
+  watchFam();
+  cloud.claim = () => F.setDoc(famDoc, { owner: MY, t: now() });
+  cloud.watchMembers = (cb, onErr) => F.onSnapshot(F.collection(db, 'families', code, 'members'),
+    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onErr);
   const since = now() - 120 * 864e5;
   const listen = (n, tries = 0) => F.onSnapshot(
     F.query(col(n), F.where('t', '>=', since)),
@@ -955,7 +980,10 @@ $('menuBtn').onclick = () => {
     <div class="row">
       <a href="https://wa.me/?text=${encodeURIComponent('Únete a la app de llantos de la bebé (ábrelo en el celular y agrégalo a la pantalla de inicio): ' + link)}" target="_blank" rel="noopener">📲 Invitar por WhatsApp</a>
       <button id="leaveBtn">Salir de la familia</button>
-    </div>` :
+    </div>
+    ${cloud.owner && cloud.owner === cloud.uid ? `<div class="row"><button id="whoBtn">🟢 Quién está en línea</button></div>` : ''}
+    ${cloud.owner === null ? `<div class="row"><button id="claimBtn">👑 Soy la mamá: activar mis opciones</button></div>
+      <p class="note">Solo debe tocarlo la mamá. La primera persona que lo toque queda como administradora y nadie más lo verá.</p>` : ''}` :
     `<p class="note">Modo solo este celular. Para compartir con otros cuidadores, configura <b>firebase-config.js</b>.</p>`;
   m.innerHTML = famBox + `
     <h3>Hoy</h3>
@@ -975,6 +1003,11 @@ $('menuBtn').onclick = () => {
     <p class="note">Es una ayuda, no un diagnóstico. Llanto muy agudo, que no se calma con nada, fiebre, rechazo a comer o decaimiento: llama al pediatra.</p>`;
   m.hidden = false; wipeArmed = false;
   if ($('leaveBtn')) $('leaveBtn').onclick = () => { lsSet('llanto.fam', null); location.href = location.pathname; };
+  if ($('whoBtn')) $('whoBtn').onclick = () => { m.hidden = true; openWho(); };
+  if ($('claimBtn')) $('claimBtn').onclick = async () => {
+    try { await cloud.claim(); cloud.owner = cloud.uid; m.hidden = true; toast('Listo 👑 Ahora en el menú ves quién está en línea'); }
+    catch (e) { console.error(e); toast('No se pudo. ¿Ya hay otra administradora o falta publicar las reglas nuevas?'); }
+  };
   $('tourBtn').onclick = startTour;
   $('wxBtn').onclick = async () => {
     if (lsGet(WX_LOC)) { disableWeather(); toast('Clima de afuera desactivado'); }
@@ -1002,6 +1035,47 @@ $('menuBtn').onclick = () => {
     render(); m.hidden = true; $('result').hidden = true; toast('Datos borrados');
   };
 };
+
+/* ====== Quién está en línea (solo la administradora) ====== */
+const ONLINE_MS = 2.5 * 60000;
+function agoTxt(t) {
+  const m = (now() - t) / 60000;
+  if (m < 1) return 'hace un momento';
+  if (m < 60) return `hace ${Math.round(m)} min`;
+  if (m < 24 * 60) return `hace ${fmt(m)}`;
+  const d = Math.floor(m / 1440);
+  return d === 1 ? 'ayer' : `hace ${d} días`;
+}
+function whenTxt(t) {
+  const d = new Date(t), t0 = new Date(); t0.setHours(0, 0, 0, 0);
+  const day = d >= t0 ? 'hoy' : d >= t0 - 864e5 ? 'ayer' : d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+  return `${day} ${hhmm(t)}`;
+}
+function openWho() {
+  const sh = $('sheet');
+  let list = [], unsub = null, tick = null;
+  const close = () => { if (unsub) unsub(); clearInterval(tick); sh.hidden = true; sh.innerHTML = ''; };
+  const draw = () => {
+    const rows = list.map(x => ({ ...x, seen: x.seen || x.t || 0 }))
+      .map(x => ({ ...x, online: x.on !== false && now() - x.seen < ONLINE_MS }))
+      .sort((a, b) => (b.online - a.online) || (b.seen - a.seen));
+    const n = rows.filter(x => x.online).length;
+    sh.innerHTML = `<div class="sheet">
+      <h3 style="margin-top:0">🟢 Quién está en línea</h3>
+      <p class="note" style="margin-top:0">${n ? `${n} ${n === 1 ? 'persona' : 'personas'} con la app abierta ahora` : 'Nadie más tiene la app abierta ahora'}</p>
+      ${rows.length ? rows.map(x => `<div class="who"><i class="dot ${x.online ? 'on' : ''}"></i><div>
+        <b>${esc(x.name || 'Sin nombre')}${x.id === cloud.uid ? ' (tú)' : ''}</b>
+        <small>${x.online ? '<span class="on-t">En línea ahora</span>' : x.seen ? `Entró ${agoTxt(x.seen)} · ${whenTxt(x.seen)}` : 'Aún no ha entrado'}</small>
+      </div></div>`).join('') : '<p class="note">Cargando…</p>'}
+      <p class="note">Solo tú ves esta lista. Si alguien aparece dos veces es porque entró desde otro celular o navegador.</p>
+      <button class="later" id="whoClose">Cerrar</button></div>`;
+    $('whoClose').onclick = close;
+  };
+  sh.onclick = e => { if (e.target === sh) close(); };
+  sh.hidden = false; draw();
+  unsub = cloud.watchMembers(a => { list = a; draw(); }, err => { console.error(err); close(); toast('No pude ver la lista. Revisa que publicaste las reglas nuevas.'); });
+  tick = setInterval(draw, 30000);
+}
 
 /* ====== Arranque ====== */
 function genCode() {
@@ -1085,6 +1159,7 @@ async function start() {
     showApp(); setSync('⏳ conectando…');
     try {
       await initCloud(FAM);
+      if (uploadLocal) cloud.claim().then(() => cloud.owner = cloud.uid).catch(console.error);
       if (uploadLocal && (local.events.length || local.cries.length)) {
         await cloud.bulk('events', local.events); await cloud.bulk('cries', local.cries);
         toast('Subí los registros que ya tenías ✓');

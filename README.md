@@ -28,5 +28,10 @@ PWA que sugiere por qué llora la bebé (hambre, sueño, pañal, frío/calor, ot
 - Menú ⋯ → **Invitar por WhatsApp**. Los demás abren el link, escriben su nombre y tocan **Unirme**.
 - En cada celular: "Agregar a pantalla de inicio".
 
+## Quién está en línea (solo la mamá)
+- Quien crea la familia queda como administradora. En familias ya creadas, la mamá toca una vez **Menú ⋯ → 👑 Soy la mamá: activar mis opciones**.
+- Después ve en el menú **🟢 Quién está en línea**: quién tiene la app abierta ahora y hace cuánto entró cada uno.
+- Los demás cuidadores no ven esa lista (lo bloquean las reglas de Firestore).
+
 ## Privacidad
 El audio se analiza en el celular y nunca se sube. En la nube solo quedan horas, etiquetas, el nombre de quien registró y unos números que describen el llanto. Solo entra quien tenga el código de familia.
