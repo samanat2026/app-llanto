@@ -81,11 +81,15 @@
   .chips button{background:var(--card2);border-radius:14px;padding:16px 4px;font-size:18px;font-weight:600}
   .chips button small{display:block;font-size:11px;font-weight:400;color:var(--mut)}
   .chips button:active{background:var(--ok);color:#111}
-  .banner{display:flex;align-items:center;gap:8px;background:#2d2a40;border:1px solid var(--ok);border-radius:16px;padding:10px 12px;margin-top:12px}
-  .banner span{flex:1;font-size:14px}
-  .banner b{font-size:22px;font-variant-numeric:tabular-nums}
-  .banner button{background:var(--card2);border-radius:10px;padding:12px 10px;font-size:14px}
-  .banner .stop{background:var(--ok);color:#111;font-weight:600}
+  .banner{display:flex;flex-direction:column;gap:10px;background:#2d2a40;border:1px solid var(--ok);border-radius:16px;padding:12px;margin-top:12px}
+  .banner span{font-size:14px}
+  .banner b{font-size:24px;font-variant-numeric:tabular-nums}
+  .banner.paused{border-color:var(--warn)}
+  .bgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .bgrid button{background:var(--card2);border-radius:12px;padding:13px 8px;font-size:15px}
+  .bgrid .stop{background:var(--ok);color:#111;font-weight:600}
+  .resume{width:100%;background:#2d2a40;border:1px solid var(--ok);border-radius:16px;padding:14px;font-size:16px;margin-bottom:12px;text-align:left}
+  .resume small{display:block;color:var(--mut);font-size:12px;margin-top:2px}
   [hidden]{display:none!important}
 </style>
 </head>
@@ -425,31 +429,61 @@ function feedDetail(e) {
   if (e.mode === 'breast') return e.end ? `pecho ${e.mins} min` : 'pecho en curso';
   return '';
 }
+/* Pausas: cuando se queda dormida un momento y vuelve a buscar el pecho, es la MISMA toma */
+const pausedNow = f => !!(f.pauses && f.pauses.length && !f.pauses[f.pauses.length - 1].t1);
+function activeMs(f, end = f.end || now()) {
+  let ms = end - f.t;
+  (f.pauses || []).forEach(p => ms -= Math.max(0, (p.t1 || end) - p.t0));
+  return Math.max(0, ms);
+}
+function finishFeed(x) {
+  if (pausedNow(x)) x.pauses[x.pauses.length - 1].t1 = now();
+  x.end = now(); x.mins = Math.max(1, Math.round(activeMs(x) / 60000)); persist('events', x);
+}
+function restoreEvent(snap) {
+  const i = D.events.findIndex(e => e.id === snap.id);
+  if (i >= 0) D.events[i] = snap; else D.events.push(snap);
+  persist('events', snap);
+}
 function renderBanner() {
   const el = $('feedBanner'), f = ongoingFeed();
   if (!f) { el.innerHTML = ''; el.dataset.k = ''; return; }
-  const cur = f.segs[f.segs.length - 1], other = cur.s === 'izq' ? 'der' : 'izq', k = f.id + cur.s;
+  const cur = f.segs[f.segs.length - 1], other = cur.s === 'izq' ? 'der' : 'izq', paused = pausedNow(f);
+  const k = f.id + cur.s + (paused ? 'p' : '');
   if (el.dataset.k !== k) {
     el.dataset.k = k;
-    el.innerHTML = `<div class="banner">
-      <span>🤱 Pecho ${SIDE[cur.s]}${cloud && f.by ? ' · ' + esc(f.by) : ''}<br><b id="fbTime"></b></span>
-      <button id="fbSwitch">Cambiar a ${SIDE[other]}</button>
-      <button class="stop" id="fbStop">Terminar</button></div>`;
+    el.innerHTML = `<div class="banner ${paused ? 'paused' : ''}">
+      <span>🤱 Pecho ${SIDE[cur.s]}${cloud && f.by ? ' · ' + esc(f.by) : ''}${paused ? ' · <b style="font-size:14px;color:var(--warn)">en pausa</b>' : ''}<br><b id="fbTime"></b></span>
+      <div class="bgrid">
+        <button id="fbPause">${paused ? '▶ Volvió a tomar' : '⏸ Pausa (se soltó)'}</button>
+        <button id="fbSwitch">Cambiar a ${SIDE[other]}</button>
+        <button id="fbSleep">😴 Se durmió</button>
+        <button class="stop" id="fbStop">Terminar</button>
+      </div></div>`;
+    $('fbPause').onclick = () => {
+      const x = ongoingFeed(); if (!x) return;
+      x.pauses = x.pauses || [];
+      if (pausedNow(x)) x.pauses[x.pauses.length - 1].t1 = now(); else x.pauses.push({ t0: now(), t1: null });
+      persist('events', x); renderBanner();
+    };
     $('fbSwitch').onclick = () => {
       const x = ongoingFeed(); if (!x) return;
+      if (pausedNow(x)) x.pauses[x.pauses.length - 1].t1 = now();
       x.segs.push({ s: other, t: now() }); persist('events', x); renderBanner();
     };
-    $('fbStop').onclick = () => {
+    const end = withSleep => {
       const x = ongoingFeed(); if (!x) return;
-      x.end = now(); x.mins = Math.max(1, Math.round((x.end - x.t) / 60000)); persist('events', x); render();
-      const id = x.id;
-      toast(`🤱 Pecho ${x.mins} min · guardado`, [{ t: 'Deshacer', fn: () => {
-        const y = D.events.find(e => e.id === id); if (!y) return;
-        y.end = null; delete y.mins; persist('events', y); render();
+      const snap = clean(x); finishFeed(x);
+      const sl = withSleep && !asleep() ? addEvent('sleep') : null;
+      render();
+      toast(`🤱 Pecho ${x.mins} min${sl ? ' · 😴 dormida' : ''} · guardado`, [{ t: 'Deshacer', fn: () => {
+        restoreEvent(snap); if (sl) removeEvent(sl.id); render();
       } }]);
     };
+    $('fbSleep').onclick = () => end(true);
+    $('fbStop').onclick = () => end(false);
   }
-  const sec = Math.max(0, Math.floor((now() - f.t) / 1000));
+  const sec = Math.floor(activeMs(f) / 1000);
   $('fbTime').textContent = `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
 }
 setInterval(() => { if (!$('app').hidden && ongoingFeed()) renderBanner(); }, 1000);
@@ -461,8 +495,12 @@ function openFeedSheet() {
   let side = ls === 'izq' ? 'der' : 'izq';   // sugiere el lado contrario al último
   const sh = $('sheet');
   const close = () => { sh.hidden = true; sh.innerHTML = ''; };
+  // Toma de pecho que terminó hace menos de 20 min: se puede continuar como la misma toma
+  const rf = D.events.filter(e => e.type === 'feed' && e.mode === 'breast' && e.end && now() - e.end < 20 * 60000).sort((a, b) => b.end - a.end)[0];
   const draw = () => {
     sh.innerHTML = `<div class="sheet">
+      ${rf ? `<button class="resume" id="resumeFeed">↩ <b>Seguir la toma de hace ${fmt(mins(rf.end))}</b> (${rf.mins} min)
+        <small>Se quedó dormida y volvió a buscar el pecho: lo sumo a esa misma toma</small></button>` : ''}
       <h3 style="margin-top:0">¿Cómo comió?</h3>
       <div class="seg">
         <button data-m="breast" class="${feedMode === 'breast' ? 'sel' : ''}">🤱 Pecho</button>
@@ -501,6 +539,22 @@ function openFeedSheet() {
       close();
       quickLog('feed', `🍼 Tetero ${b.dataset.oz} oz`, { mode: 'bottle', oz: +b.dataset.oz });
     });
+    const rb = $('resumeFeed');
+    if (rb) rb.onclick = () => {
+      close();
+      const x = D.events.find(e => e.id === rf.id); if (!x) return;
+      const snap = clean(x);
+      x.pauses = x.pauses || []; x.pauses.push({ t0: x.end, t1: now() });
+      x.end = null; delete x.mins; persist('events', x);
+      // Si se registró "se durmió" al terminar, fue solo una microsiesta: se quita
+      const s = last(['sleep', 'wake']);
+      const removed = s && s.type === 'sleep' && s.t >= snap.end - 60000 ? s : null;
+      if (removed) removeEvent(removed.id);
+      render();
+      toast(`↩ Toma reanudada${removed ? ' · quité el "se durmió"' : ''}`, [{ t: 'Deshacer', fn: () => {
+        restoreEvent(snap); if (removed) { D.events.push(removed); persist('events', removed); } render();
+      } }]);
+    };
     $('plainFeed').onclick = () => { close(); quickLog('feed', '🍼 Comió'); };
     $('closeSheet').onclick = close;
   };
