@@ -49,7 +49,7 @@
   .bars i::after{content:"";position:absolute;inset:0;width:var(--w);background:var(--acc);border-radius:3px}
   .bars span{width:105px}
   .learn{font-size:12px;color:var(--mut);margin:10px 0 0}
-  .labels{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+  .labels{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
   .labels button{background:var(--card2);border-radius:14px;padding:10px 2px;font-size:26px;display:flex;flex-direction:column;align-items:center}
   .labels button small{font-size:10.5px;color:var(--mut);margin-top:2px}
   .labels button:active,.labels button.sel{background:var(--ok);color:#111}
@@ -57,7 +57,8 @@
   .later{background:none;color:var(--mut);width:100%;padding:10px;font-size:14px}
   .pend{display:flex;align-items:center;gap:6px;padding:8px 0;border-top:1px solid #ffffff10}
   .pend .t{flex:1;font-size:13px;color:var(--mut)}
-  .pend button{background:var(--card2);border-radius:10px;width:38px;height:38px;font-size:18px}
+  .pend button{background:var(--card2);border-radius:10px;width:34px;height:38px;font-size:17px;padding:0}
+  .wx{font-size:12px;color:var(--mut)}
   .menu p{margin:6px 0;font-size:14px}
   .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
   .row button,.row label,.row a{background:var(--card2);border-radius:12px;padding:10px 12px;font-size:14px;cursor:pointer;color:var(--tx);text-decoration:none}
@@ -156,7 +157,7 @@
   <section id="app" hidden>
     <header>
       <h1>¿Qué tiene?</h1>
-      <span class="sync" id="sync"></span>
+      <span class="sync"><span class="wx" id="wx"></span> <span id="sync"></span></span>
       <button class="icon-btn" id="menuBtn" aria-label="Menú">⋯</button>
     </header>
 
@@ -179,6 +180,7 @@
     </section>
 
     <button class="daybtn" id="dayBtn">📊 Resumen y cronograma del día</button>
+    <section id="wxAsk"></section>
 
     <section id="pending"></section>
     <section id="menu" class="card menu" hidden></section>
@@ -195,10 +197,13 @@ const LABELS = {
   hambre: { t: 'Hambre',       s: 'Hambre', e: '🍼', tip: 'Ofrécele pecho o tetero.' },
   sueno:  { t: 'Sueño',        s: 'Sueño',  e: '😴', tip: 'Baja luces y ruido, arrúllala o envuélvela.' },
   panal:  { t: 'Pañal',        s: 'Pañal',  e: '🧷', tip: 'Revisa y cambia el pañal.' },
-  temp:   { t: 'Frío / calor', s: 'Temp.',  e: '🌡️', tip: 'Toca su nuca o pecho: si suda, quítale ropa; si está fría, abrígala.' },
+  frio:   { t: 'Frío',         s: 'Frío',   e: '🥶', tip: 'Tócale la nuca o el pecho: si están fríos, ponle una capa más (una más que tú) o una cobija.' },
+  calor:  { t: 'Calor',        s: 'Calor',  e: '🥵', tip: 'Si la nuca está sudada o caliente, quítale una capa y ventila el cuarto. Manos y pies fríos son normales.' },
   otro:   { t: 'Otro (gases, brazos)', s: 'Otro', e: '🤱', tip: 'Prueba sacarle gases o cargarla piel con piel.' }
 };
 const KEYS = Object.keys(LABELS);
+const OLD = { temp: { t: 'Frío / calor', s: 'Temp.', e: '🌡️' } };     // etiqueta de versiones anteriores
+const Lb = k => LABELS[k] || OLD[k] || { t: k, s: k, e: '•' };
 const REC_SECONDS = 6;
 const FB_VERSION = '10.12.2';
 const CFG = window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey ? window.FIREBASE_CONFIG : null;
@@ -306,7 +311,8 @@ function getCtx() {
     awake: sw ? (sw.type === 'wake' ? mins(sw.t) : 0) : null,
     sinceDiaper: dp ? mins(dp.t) : null,
     hour: d.getHours() + d.getMinutes() / 60,
-    feedInt: feedInterval(), wakeWin: wakeWindow()
+    feedInt: feedInterval(), wakeWin: wakeWindow(),
+    tOut: outsideTemp()
   };
 }
 
@@ -318,20 +324,31 @@ function prior(c) {
     hambre: c.sinceFeed == null ? 0.35 : 0.05 + 0.9 * sig(c.sinceFeed, c.feedInt * 0.85, 15),
     sueno:  c.awake == null ? 0.3 : 0.05 + 0.85 * sig(c.awake, c.wakeWin * 0.9, 12),
     panal:  c.sinceDiaper == null ? 0.3 : 0.05 + 0.7 * sig(c.sinceDiaper, 150, 25),
-    temp: 0.12, otro: 0.15
+    ...tempPrior(c),
+    otro: 0.15
   });
 }
+function tempPrior(c) {
+  if (c.tOut != null) return {                       // con clima de afuera
+    frio:  0.03 + 0.17 * sig(16 - c.tOut, 0, 2),
+    calor: 0.03 + 0.17 * sig(c.tOut - 26, 0, 2)
+  };
+  const night = c.hour < 6 || c.hour >= 22, afternoon = c.hour >= 12 && c.hour < 17;
+  return { frio: night ? 0.09 : 0.05, calor: afternoon ? 0.08 : 0.05 };
+}
+const CTX_DIMS = 6;
 function ctxVec(c) {
   return [
     clip(c.sinceFeed == null ? 1 : c.sinceFeed / c.feedInt, 0, 3),
     clip(c.awake == null ? 1 : c.awake / c.wakeWin, 0, 3),
     clip(c.sinceDiaper == null ? 1 : c.sinceDiaper / 180, 0, 3),
-    Math.sin(2 * Math.PI * c.hour / 24), Math.cos(2 * Math.PI * c.hour / 24)
+    Math.sin(2 * Math.PI * c.hour / 24), Math.cos(2 * Math.PI * c.hour / 24),
+    c.tOut == null ? 0 : clip((c.tOut - 20) / 5, -3, 3)
   ];
 }
 function knn(cur) {
   const useAudio = !!cur.audio;
-  const train = D.cries.filter(c => c.label && c.id !== cur.id && (!useAudio || (c.audio && c.audio.length === cur.audio.length)));
+  const train = D.cries.filter(c => c.label && LABELS[c.label] && c.id !== cur.id && (!useAudio || (c.audio && c.audio.length === cur.audio.length)));
   if (train.length < 3) return null;
   const vec = c => useAudio ? ctxVec(c.ctx).concat(c.audio) : ctxVec(c.ctx);
   const X = train.map(vec), q = vec(cur), dim = q.length;
@@ -339,7 +356,7 @@ function knn(cur) {
   X.forEach(v => v.forEach((x, i) => mean[i] += x / X.length));
   X.forEach(v => v.forEach((x, i) => sd[i] += (x - mean[i]) ** 2 / X.length));
   for (let i = 0; i < dim; i++) sd[i] = Math.max(Math.sqrt(sd[i]), 0.05);
-  const wDim = i => i < 5 ? 1 : 0.6;
+  const wDim = i => i < CTX_DIMS ? 1 : 0.6;
   const dist = v => Math.sqrt(v.reduce((a, x, i) => a + wDim(i) * ((x - q[i]) / sd[i]) ** 2, 0));
   const nb = train.map((c, i) => ({ l: c.label, d: dist(X[i]) })).sort((a, b) => a.d - b.d).slice(0, Math.min(7, train.length));
   const s = {}; KEYS.forEach(k => s[k] = 0.2);
@@ -353,7 +370,7 @@ function predict(cur) {
   KEYS.forEach(k => o[k] = (1 - w) * p[k] + w * r.p[k]);
   return { p: normP(o), w };
 }
-const topOf = p => KEYS.slice().sort((a, b) => p[b] - p[a])[0];
+const topOf = p => KEYS.slice().sort((a, b) => (p[b] || 0) - (p[a] || 0))[0];
 
 /* ====== Audio (se analiza en el celular, nunca se sube) ====== */
 function frameFeatures(td, fd, sr, N) {
@@ -422,6 +439,49 @@ async function recordFeatures(seconds, onTick) {
   return skipped ? { skipped: true } : { audio: aggregate(F, seconds) };
 }
 
+/* ====== Clima de afuera (Open-Meteo, gratis y sin cuenta) ======
+   La ubicación se redondea (~1 km), se queda en este celular y solo se usa para pedir la temperatura. */
+const WX_LOC = 'llanto.wxLoc', WX_DATA = 'llanto.wx';
+function outsideTemp() {
+  try { const w = JSON.parse(lsGet(WX_DATA)); if (w && now() - w.t < 90 * 60000) return w.temp; } catch (e) {}
+  return null;
+}
+async function refreshWeather(force) {
+  let loc; try { loc = JSON.parse(lsGet(WX_LOC)); } catch (e) {}
+  if (!loc) return null;
+  try { const w = JSON.parse(lsGet(WX_DATA)); if (!force && w && now() - w.t < 30 * 60000) { showWx(); return w.temp; } } catch (e) {}
+  try {
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m`);
+    const j = await r.json(), temp = j && j.current && j.current.temperature_2m;
+    if (typeof temp === 'number') { lsSet(WX_DATA, JSON.stringify({ t: now(), temp })); showWx(); return temp; }
+  } catch (e) {}
+  return null;
+}
+function showWx() { const t = outsideTemp(); $('wx').textContent = t == null ? '' : `🌡️ ${Math.round(t)}° afuera`; }
+function enableWeather() {
+  return new Promise(res => {
+    if (!navigator.geolocation) { toast('Este celular no permite ubicación'); return res(false); }
+    navigator.geolocation.getCurrentPosition(async p => {
+      lsSet(WX_LOC, JSON.stringify({ lat: +p.coords.latitude.toFixed(2), lon: +p.coords.longitude.toFixed(2) }));
+      lsSet('llanto.wxAsk', '1');
+      const t = await refreshWeather(true);
+      toast(t != null ? `🌡️ Listo: afuera hay ${Math.round(t)} °C` : 'Ubicación guardada; el clima se cargará con internet');
+      render(); res(true);
+    }, () => { toast('Sin permiso de ubicación: sigo sin clima. Puedes activarlo en el menú.'); lsSet('llanto.wxAsk', '1'); render(); res(false); },
+    { enableHighAccuracy: false, timeout: 15000, maximumAge: 6 * 3600e3 });
+  });
+}
+function disableWeather() { lsSet(WX_LOC, null); lsSet(WX_DATA, null); showWx(); }
+function renderWxAsk() {
+  const el = $('wxAsk');
+  if (lsGet('llanto.wxAsk') || lsGet(WX_LOC)) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="card"><p style="margin:0 0 10px">🌡️ <b>¿Uso el clima de afuera?</b> Ayuda a saber si llora por frío o por calor (por ejemplo, en madrugadas frías). Tu ubicación se queda en este celular.</p>
+    <div class="row" style="margin-top:0"><button id="wxYes" style="background:var(--ok);color:#111;font-weight:600">Activar</button><button id="wxNo">Ahora no</button></div></div>`;
+  $('wxYes').onclick = enableWeather;
+  $('wxNo').onclick = () => { lsSet('llanto.wxAsk', '1'); renderWxAsk(); };
+}
+setInterval(() => refreshWeather(false), 10 * 60000);
+
 /* ====== Formato ====== */
 function fmt(m) {
   if (m == null) return '—';
@@ -434,6 +494,10 @@ function why(k, c) {
   if (k === 'hambre') return c.sinceFeed == null ? 'Aún no hay tomas registradas' : `Comió hace ${fmt(c.sinceFeed)} · suele comer cada ${fmt(c.feedInt)}`;
   if (k === 'sueno') return c.awake == null ? 'Aún no hay sueño registrado' : (c.awake === 0 ? 'Estaba dormida' : `Lleva ${fmt(c.awake)} despierta · aguanta ~${fmt(c.wakeWin)}`);
   if (k === 'panal') return c.sinceDiaper == null ? 'Aún no hay pañales registrados' : `Último pañal hace ${fmt(c.sinceDiaper)}`;
+  if (k === 'frio' || k === 'calor') {
+    const h = c.hour < 6 ? ' · es de madrugada' : (c.hour >= 12 && c.hour < 17 ? ' · es la hora más caliente' : '');
+    return c.tOut != null ? `Afuera hay ${Math.round(c.tOut)} °C${h}` : `Sin dato del clima${h}`;
+  }
   return 'Sus horarios no explican bien este llanto';
 }
 
@@ -458,6 +522,7 @@ function render() {
   sb.classList.toggle('on', sl);
   renderBanner();
   renderPending();
+  renderWxAsk(); showWx();
 }
 
 /* ====== Tomas: pecho (cronómetro y lado) o tetero (onzas) ====== */
@@ -635,7 +700,7 @@ function renderPending() {
   const shown = $('result').hidden ? null : currentCryId;
   const P = D.cries.filter(c => !c.label && c.id !== shown && now() - c.t < 48 * 3600e3).sort((a, b) => b.t - a.t).slice(0, 6);
   $('pending').innerHTML = P.length ? `<div class="card"><h3 style="margin-top:0">Pendientes — ¿qué la calmó?</h3>${P.map(c =>
-    `<div class="pend"><span class="t">${hhmm(c.t)}${cloud && c.by ? ' · ' + esc(c.by) : ''} · sugerí ${LABELS[topOf(c.pred.p)].e}</span>${KEYS.map(k => `<button data-c="${c.id}" data-l="${k}">${LABELS[k].e}</button>`).join('')}</div>`
+    `<div class="pend"><span class="t">${hhmm(c.t)}${cloud && c.by ? ' · ' + esc(c.by) : ''} · sugerí ${Lb(topOf(c.pred.p)).e}</span>${KEYS.map(k => `<button data-c="${c.id}" data-l="${k}">${LABELS[k].e}</button>`).join('')}</div>`
   ).join('')}</div>` : '';
   $('pending').querySelectorAll('[data-c]').forEach(b => b.onclick = () => labelCry(b.dataset.c, b.dataset.l, false));
 }
@@ -662,6 +727,7 @@ function labelCry(id, l, fromResult) {
 let busy = false;
 $('cryBtn').onclick = async () => {
   if (busy) return; busy = true;
+  const wxP = refreshWeather(false);
   const ctx = getCtx();
   $('cryTxt').textContent = 'Escuchando…'; $('skipBtn').hidden = false;
   let audio = null, noAudio = null;
@@ -676,6 +742,8 @@ $('cryBtn').onclick = async () => {
     noAudio = 'nomic';
     toast('No pude usar el micrófono: uso solo los horarios. Revisa el permiso del navegador.');
   }
+  await Promise.race([wxP, new Promise(r => setTimeout(r, 1500))]).catch(() => {});
+  if (ctx.tOut == null) ctx.tOut = outsideTemp();
   const cry = { id: uid(), t: now(), ctx, audio, noAudio, label: null, by: ME };
   cry.pred = predict(cry);
   D.cries.push(cry); persist('cries', cry);
@@ -759,7 +827,7 @@ function buildDay(off) {
     else items.push({ t: f.t, h: hhmm(f.t), x: '🍼 Comió', by: who(f) });
   });
   diapers.forEach(e => items.push({ t: e.t, h: hhmm(e.t), x: '🧷 Cambio de pañal', by: who(e) }));
-  cries.forEach(c => items.push({ t: c.t, h: hhmm(c.t), x: `😢 Lloró${c.label ? ` → la calmó: ${LABELS[c.label].e} ${LABELS[c.label].t}` : ` · sugerí ${LABELS[topOf(c.pred.p)].e} (sin marcar)`}`, by: who(c) }));
+  cries.forEach(c => items.push({ t: c.t, h: hhmm(c.t), x: `😢 Lloró${c.label ? ` → la calmó: ${Lb(c.label).e} ${Lb(c.label).t}` : ` · sugerí ${Lb(topOf(c.pred.p)).e} (sin marcar)`}`, by: who(c) }));
   sleeps.forEach(s => items.push({ t: s.ca, h: `${s.a < d0 ? 'ayer ' + hhmm(s.a) : hhmm(s.ca)}–${s.on && s.cb >= now() - 1000 ? 'ahora' : hhmm(s.cb)}`, x: `😴 Durmió ${dur(s.cb - s.ca)}${s.on ? ' · sigue dormida' : ''}`, by: who(s) }));
   awakes.forEach(s => items.push({ t: s.ca, h: `${hhmm(s.ca)}–${s.on ? 'ahora' : hhmm(s.cb)}`, x: `☀️ Despierta ${dur(s.cb - s.ca)}`, by: '' }));
   items.sort((a, b) => a.t - b.t);
@@ -843,7 +911,7 @@ let wipeArmed = false;
 $('menuBtn').onclick = () => {
   const m = $('menu');
   if (!m.hidden) { m.hidden = true; return; }
-  const cnt = {}; KEYS.forEach(k => cnt[k] = 0); D.cries.forEach(c => c.label && cnt[c.label]++);
+  const cnt = {}; KEYS.forEach(k => cnt[k] = 0); D.cries.forEach(c => c.label && cnt[c.label] != null && cnt[c.label]++);
   const lab = D.cries.filter(c => c.label), hits = lab.filter(c => topOf(c.pred.p) === c.label).length;
   const link = `${location.origin}${location.pathname}?f=${FAM}`;
   const d0 = new Date(); d0.setHours(0, 0, 0, 0);
@@ -867,6 +935,7 @@ $('menuBtn').onclick = () => {
     <p>Suele comer cada <b>${fmt(feedInterval())}</b> · aguanta despierta <b>~${fmt(wakeWindow())}</b></p>
     <div class="row">
       <button id="tourBtn">❓ Ver tutorial</button>
+      <button id="wxBtn">${lsGet(WX_LOC) ? '🌡️ Quitar clima de afuera' : '🌡️ Usar clima de afuera'}</button>
       <button id="expBtn">⬇️ Descargar respaldo</button>
       <label>⬆️ Restaurar<input type="file" id="impIn" accept="application/json" hidden></label>
       <button id="wipeBtn" class="danger">Borrar todo</button>
@@ -876,6 +945,11 @@ $('menuBtn').onclick = () => {
   m.hidden = false; wipeArmed = false;
   if ($('leaveBtn')) $('leaveBtn').onclick = () => { lsSet('llanto.fam', null); location.href = location.pathname; };
   $('tourBtn').onclick = startTour;
+  $('wxBtn').onclick = async () => {
+    if (lsGet(WX_LOC)) { disableWeather(); toast('Clima de afuera desactivado'); }
+    else await enableWeather();
+    m.hidden = true;
+  };
   $('expBtn').onclick = () => {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(D)], { type: 'application/json' }));
@@ -914,7 +988,7 @@ function showApp() {
 const TOUR = [
   { t: '👋 <b>¡Bienvenida!</b> Te muestro en 30 segundos cómo funciona la app. Todo se registra con un solo toque.' },
   { el: '#status', t: '<b>De un vistazo:</b> hace cuánto comió, cuánto lleva despierta y cuándo fue el último pañal. Se pone <b style="color:#c99a1a">amarillo</b> cuando ya le toca.' },
-  { el: '#cryBtn', t: '<b>Cuando llore,</b> toca aquí y acerca el celular a ella unos segundos. Te digo la causa más probable: hambre, sueño, pañal, frío/calor u otra.' },
+  { el: '#cryBtn', t: '<b>Cuando llore,</b> toca aquí y acerca el celular a ella unos segundos. Te digo la causa más probable: hambre, sueño, pañal, frío, calor u otra.' },
   { el: '[data-ev=feed]', t: '<b>Cuando coma,</b> toca aquí. Eliges <b>pecho</b> (con cronómetro y lado) o <b>tetero</b> (tocas las onzas).' },
   { el: '#sleepBtn', t: '<b>Cuando se duerma</b> toca aquí, y <b>cuando se despierte</b> vuelves a tocar el mismo botón.' },
   { el: '[data-ev=diaper]', t: '<b>Cada cambio de pañal,</b> un toque aquí.' },
@@ -995,6 +1069,7 @@ async function start() {
   };
 }
 start();
+refreshWeather(false);
 setInterval(render, 30000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
