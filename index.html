@@ -72,6 +72,20 @@
          padding:12px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;box-shadow:0 8px 24px #0008;font-size:15px;z-index:9}
   #toast span{flex:1;min-width:140px}
   #toast button{background:#ffffff18;border-radius:10px;padding:8px 10px;font-size:14px}
+  .sheet-bg{position:fixed;inset:0;background:#0009;z-index:8;display:flex;align-items:flex-end}
+  .sheet{background:var(--card);width:100%;max-width:520px;margin:0 auto;border-radius:24px 24px 0 0;padding:18px 16px calc(env(safe-area-inset-bottom) + 14px);max-height:92vh;overflow:auto}
+  .seg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+  .seg button{background:var(--card2);border-radius:14px;padding:14px;font-size:17px}
+  .seg button.sel{background:var(--acc);color:#111;font-weight:600}
+  .chips{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .chips button{background:var(--card2);border-radius:14px;padding:16px 4px;font-size:18px;font-weight:600}
+  .chips button small{display:block;font-size:11px;font-weight:400;color:var(--mut)}
+  .chips button:active{background:var(--ok);color:#111}
+  .banner{display:flex;align-items:center;gap:8px;background:#2d2a40;border:1px solid var(--ok);border-radius:16px;padding:10px 12px;margin-top:12px}
+  .banner span{flex:1;font-size:14px}
+  .banner b{font-size:22px;font-variant-numeric:tabular-nums}
+  .banner button{background:var(--card2);border-radius:10px;padding:12px 10px;font-size:14px}
+  .banner .stop{background:var(--ok);color:#111;font-weight:600}
   [hidden]{display:none!important}
 </style>
 </head>
@@ -101,6 +115,7 @@
       <button class="icon-btn" id="menuBtn" aria-label="Menú">⋯</button>
     </header>
 
+    <div id="feedBanner"></div>
     <section class="status" id="status"></section>
 
     <button class="cry" id="cryBtn">
@@ -122,6 +137,7 @@
     <section id="menu" class="card menu" hidden></section>
   </section>
 </main>
+<div id="sheet" class="sheet-bg" hidden></div>
 <div id="toast" hidden></div>
 
 <script src="firebase-config.js"></script>
@@ -206,7 +222,7 @@ async function initCloud(code) {
 }
 
 /* ====== Eventos ====== */
-function addEvent(type, t = now()) { const e = { id: uid(), type, t, by: ME }; D.events.push(e); persist('events', e); return e; }
+function addEvent(type, t = now(), extra = {}) { const e = { id: uid(), type, t, by: ME, ...extra }; D.events.push(e); persist('events', e); return e; }
 function removeEvent(id) { D.events = D.events.filter(e => e.id !== id); unpersist('events', id); }
 function shiftEvent(id, minutes) {
   const e = D.events.find(x => x.id === id); if (!e) return;
@@ -377,18 +393,119 @@ function why(k, c) {
 let currentCryId = null;
 function render() {
   if ($('app').hidden) return;
-  const c = getCtx(), by = e => cloud && e && e.by ? `<em>${esc(e.by)}</em>` : '';
-  const chip = (lab, v, alert, e) => `<div class="chip ${alert ? 'alert' : ''}"><b>${fmt(v)}</b><small>${lab}</small>${by(e)}</div>`;
-  const ls = last('sleep');
+  const c = getCtx();
+  const by = (e, detail = '') => {
+    const parts = [detail, cloud && e && e.by ? e.by : ''].filter(Boolean);
+    return parts.length ? `<em>${esc(parts.join(' · '))}</em>` : '';
+  };
+  const chip = (lab, v, alert, e, detail) => `<div class="chip ${alert ? 'alert' : ''}"><b>${fmt(v)}</b><small>${lab}</small>${by(e, detail)}</div>`;
+  const ls = last('sleep'), lf = last('feed');
   $('status').innerHTML =
-    chip('🍼 desde que comió', c.sinceFeed, c.sinceFeed != null && c.sinceFeed > c.feedInt * 0.85, last('feed')) +
+    chip('🍼 desde que comió', c.sinceFeed, c.sinceFeed != null && c.sinceFeed > c.feedInt * 0.85, lf, feedDetail(lf)) +
     (asleep() ? `<div class="chip"><b>Dormida</b><small>😴 ${fmt(mins(ls.t))}</small>${by(ls)}</div>`
               : chip('☀️ despierta', c.awake, c.awake != null && c.awake > c.wakeWin * 0.9, last('wake'))) +
     chip('🧷 desde el pañal', c.sinceDiaper, c.sinceDiaper != null && c.sinceDiaper > 150, last('diaper'));
   const sb = $('sleepBtn'), sl = asleep();
   sb.innerHTML = sl ? '☀️<span>Se despertó</span>' : '😴<span>Se durmió</span>';
   sb.classList.toggle('on', sl);
+  renderBanner();
   renderPending();
+}
+
+/* ====== Tomas: pecho (cronómetro y lado) o tetero (onzas) ====== */
+const SIDE = { izq: 'izquierdo', der: 'derecho' };
+const ongoingFeed = () => D.events.find(e => e.type === 'feed' && e.mode === 'breast' && !e.end && now() - e.t < 3 * 3600e3);
+function lastSide() {
+  const f = D.events.filter(e => e.type === 'feed' && e.mode === 'breast' && e.segs && e.segs.length).sort((a, b) => b.t - a.t)[0];
+  return f ? f.segs[f.segs.length - 1].s : null;
+}
+function feedDetail(e) {
+  if (!e) return '';
+  if (e.mode === 'bottle') return `${String(e.oz).replace('.', ',')} oz`;
+  if (e.mode === 'breast') return e.end ? `pecho ${e.mins} min` : 'pecho en curso';
+  return '';
+}
+function renderBanner() {
+  const el = $('feedBanner'), f = ongoingFeed();
+  if (!f) { el.innerHTML = ''; el.dataset.k = ''; return; }
+  const cur = f.segs[f.segs.length - 1], other = cur.s === 'izq' ? 'der' : 'izq', k = f.id + cur.s;
+  if (el.dataset.k !== k) {
+    el.dataset.k = k;
+    el.innerHTML = `<div class="banner">
+      <span>🤱 Pecho ${SIDE[cur.s]}${cloud && f.by ? ' · ' + esc(f.by) : ''}<br><b id="fbTime"></b></span>
+      <button id="fbSwitch">Cambiar a ${SIDE[other]}</button>
+      <button class="stop" id="fbStop">Terminar</button></div>`;
+    $('fbSwitch').onclick = () => {
+      const x = ongoingFeed(); if (!x) return;
+      x.segs.push({ s: other, t: now() }); persist('events', x); renderBanner();
+    };
+    $('fbStop').onclick = () => {
+      const x = ongoingFeed(); if (!x) return;
+      x.end = now(); x.mins = Math.max(1, Math.round((x.end - x.t) / 60000)); persist('events', x); render();
+      const id = x.id;
+      toast(`🤱 Pecho ${x.mins} min · guardado`, [{ t: 'Deshacer', fn: () => {
+        const y = D.events.find(e => e.id === id); if (!y) return;
+        y.end = null; delete y.mins; persist('events', y); render();
+      } }]);
+    };
+  }
+  const sec = Math.max(0, Math.floor((now() - f.t) / 1000));
+  $('fbTime').textContent = `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+}
+setInterval(() => { if (!$('app').hidden && ongoingFeed()) renderBanner(); }, 1000);
+
+let feedMode = lsGet('llanto.feedMode') || 'breast';
+function openFeedSheet() {
+  if (ongoingFeed()) { toast('Ya hay una toma de pecho en curso: termínala arriba'); return; }
+  const ls = lastSide();
+  let side = ls === 'izq' ? 'der' : 'izq';   // sugiere el lado contrario al último
+  const sh = $('sheet');
+  const close = () => { sh.hidden = true; sh.innerHTML = ''; };
+  const draw = () => {
+    sh.innerHTML = `<div class="sheet">
+      <h3 style="margin-top:0">¿Cómo comió?</h3>
+      <div class="seg">
+        <button data-m="breast" class="${feedMode === 'breast' ? 'sel' : ''}">🤱 Pecho</button>
+        <button data-m="bottle" class="${feedMode === 'bottle' ? 'sel' : ''}">🍼 Tetero</button>
+      </div>
+      ${feedMode === 'breast' ? `
+        <div class="seg">
+          <button data-s="izq" class="${side === 'izq' ? 'sel' : ''}">Izquierdo</button>
+          <button data-s="der" class="${side === 'der' ? 'sel' : ''}">Derecho</button>
+        </div>
+        ${ls ? `<p class="why" style="margin-top:-4px">La última vez terminó en el ${SIDE[ls]}</p>` : ''}
+        <button class="big" id="startBreast">▶ Empezar cronómetro</button>
+        <h3>¿Ya terminó? Toca los minutos</h3>
+        <div class="chips">${[5, 10, 15, 20, 25, 30, 40, 50].map(m => `<button data-min="${m}">${m}<small>min</small></button>`).join('')}</div>`
+      : `
+        <h3>¿Cuántas onzas tomó?</h3>
+        <div class="chips">${[1, 2, 3, 4, 5, 6, 7, 8].map(o => `<button data-oz="${o}">${o}<small>oz</small></button>`).join('')}</div>`}
+      <button class="later" id="plainFeed">Solo registrar que comió</button>
+      <button class="later" id="closeSheet">Cancelar</button>
+    </div>`;
+    sh.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { feedMode = b.dataset.m; lsSet('llanto.feedMode', feedMode); draw(); });
+    sh.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { side = b.dataset.s; draw(); });
+    const sb = $('startBreast');
+    if (sb) sb.onclick = () => {
+      close();
+      const e = addEvent('feed', now(), { mode: 'breast', segs: [{ s: side, t: now() }], end: null });
+      render();
+      toast(`🤱 Cronómetro iniciado · ${SIDE[side]}`, [{ t: 'Deshacer', fn: () => { removeEvent(e.id); render(); } }]);
+    };
+    sh.querySelectorAll('[data-min]').forEach(b => b.onclick = () => {
+      close();
+      const m = +b.dataset.min, t0 = now() - m * 60000;
+      quickLog('feed', `🤱 Pecho ${m} min`, { mode: 'breast', segs: [{ s: side, t: t0 }], end: now(), mins: m }, t0, false);
+    });
+    sh.querySelectorAll('[data-oz]').forEach(b => b.onclick = () => {
+      close();
+      quickLog('feed', `🍼 Tetero ${b.dataset.oz} oz`, { mode: 'bottle', oz: +b.dataset.oz });
+    });
+    $('plainFeed').onclick = () => { close(); quickLog('feed', '🍼 Comió'); };
+    $('closeSheet').onclick = close;
+  };
+  sh.onclick = ev => { if (ev.target === sh) close(); };
+  draw(); sh.hidden = false;
 }
 function renderResult(cry) {
   const P = cry.pred.p, ord = KEYS.slice().sort((a, b) => P[b] - P[a]), top = ord[0], L = LABELS[top];
@@ -464,16 +581,15 @@ $('cryBtn').onclick = async () => {
 $('skipBtn').onclick = () => { if (rec) rec.stop = true; };
 
 /* ====== Registros rápidos ====== */
-function quickLog(type, label) {
-  const e = addEvent(type); let back = 0;
+function quickLog(type, label, extra = {}, t = now(), allowShift = true) {
+  const e = addEvent(type, t, extra); let back = 0;
   render();
-  toast(`${label} · registrado`, [
-    { t: 'Deshacer', fn: () => { removeEvent(e.id); render(); } },
-    { t: 'Fue hace 15 min', keep: true, fn: span => { shiftEvent(e.id, 15); back += 15; render(); span.textContent = `${label} · hace ${back} min`; } }
-  ]);
+  const acts = [{ t: 'Deshacer', fn: () => { removeEvent(e.id); render(); } }];
+  if (allowShift) acts.push({ t: 'Fue hace 15 min', keep: true, fn: span => { shiftEvent(e.id, 15); back += 15; render(); span.textContent = `${label} · hace ${back} min`; } });
+  toast(`${label} · registrado`, acts);
 }
 document.querySelectorAll('[data-ev]').forEach(b => b.onclick = () =>
-  quickLog(b.dataset.ev, b.dataset.ev === 'feed' ? '🍼 Comió' : '🧷 Pañal'));
+  b.dataset.ev === 'feed' ? openFeedSheet() : quickLog('diaper', '🧷 Pañal'));
 $('sleepBtn').onclick = () => asleep() ? quickLog('wake', '☀️ Se despertó') : quickLog('sleep', '😴 Se durmió');
 
 /* ====== Toast ====== */
@@ -498,6 +614,10 @@ $('menuBtn').onclick = () => {
   const cnt = {}; KEYS.forEach(k => cnt[k] = 0); D.cries.forEach(c => c.label && cnt[c.label]++);
   const lab = D.cries.filter(c => c.label), hits = lab.filter(c => topOf(c.pred.p) === c.label).length;
   const link = `${location.origin}${location.pathname}?f=${FAM}`;
+  const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+  const fe = D.events.filter(e => e.type === 'feed' && e.t >= d0.getTime());
+  const oz = fe.filter(e => e.mode === 'bottle').reduce((a, e) => a + (+e.oz || 0), 0);
+  const bm = fe.filter(e => e.mode === 'breast' && e.mins).reduce((a, e) => a + e.mins, 0);
   const famBox = cloud ? `
     <h3 style="margin-top:0">Familia</h3>
     <p>Código: <code class="fam">${esc(FAM)}</code> · Tú eres <b>${esc(ME)}</b></p>
@@ -507,6 +627,8 @@ $('menuBtn').onclick = () => {
     </div>` :
     `<p class="note">Modo solo este celular. Para compartir con otros cuidadores, configura <b>firebase-config.js</b>.</p>`;
   m.innerHTML = famBox + `
+    <h3>Hoy</h3>
+    <p><b>${fe.length}</b> tomas · <b>${oz}</b> oz de tetero · <b>${bm}</b> min de pecho</p>
     <h3>Lo que va aprendiendo</h3>
     <p>${KEYS.map(k => `${LABELS[k].e} ${cnt[k]}`).join(' · ')}</p>
     <p>Aciertos de la sugerencia: <b>${lab.length ? Math.round(hits / lab.length * 100) + '%' : '—'}</b> (${hits}/${lab.length})</p>
