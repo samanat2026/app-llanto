@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cut">
+<meta name="theme-color" content="#14121c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<title>¿Qué tiene?</title>
+<style>
+  :root{--bg:#14121c;--card:#1f1c2b;--card2:#2a2639;--tx:#ece8f5;--mut:#9a93ad;--acc:#ff7aa8;--ok:#7fd6b0;--warn:#ffd27a}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  main{max-width:520px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 12px) 16px 120px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  h1{font-size:20px;margin:4px 0}
+  h3{font-size:15px;margin:16px 0 8px;color:var(--mut);font-weight:600}
+  button{font:inherit;color:inherit;border:0;cursor:pointer}
+  .sync{font-size:12px;color:var(--mut);margin-left:auto}
+  .icon-btn{background:var(--card);width:44px;height:44px;border-radius:12px;font-size:20px}
+  .status{display:flex;gap:8px;margin:12px 0 18px}
+  .chip{flex:1;background:var(--card);border-radius:14px;padding:10px 6px;text-align:center}
+  .chip b{display:block;font-size:15px}
+  .chip small{color:var(--mut);font-size:12px;display:block}
+  .chip em{color:var(--mut);font-size:11px;font-style:normal}
+  .chip.alert b{color:var(--warn)}
+  .cry{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:170px;border-radius:28px;
+       background:linear-gradient(160deg,#ff7aa8,#c45ad8);color:#fff;font-size:26px;font-weight:700;box-shadow:0 10px 30px #ff7aa833;overflow:hidden}
+  .cry small{font-size:14px;font-weight:500;opacity:.9;margin-top:4px}
+  .cry:active{transform:scale(.98)}
+  .cry .bar{position:absolute;left:0;bottom:0;height:8px;background:#fff9;width:0;transition:width .1s linear}
+  .skip{display:block;margin:10px auto 0;background:none;color:var(--mut);text-decoration:underline;font-size:15px;padding:8px}
+  .quick{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}
+  .quick button{background:var(--card);border-radius:20px;height:96px;font-size:30px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+  .quick button span{font-size:14px;color:var(--tx)}
+  .quick button:active{background:var(--card2)}
+  .quick button.on{outline:2px solid var(--ok)}
+  .card{background:var(--card);border-radius:22px;padding:16px;margin-top:16px}
+  .top{display:flex;align-items:center;gap:12px;font-size:28px}
+  .top b{font-size:24px}
+  .top .pct{margin-left:auto;font-size:20px;color:var(--acc);font-weight:700}
+  .why{color:var(--mut);margin:6px 0 2px;font-size:14px}
+  .tip{margin:8px 0 12px;font-size:15px}
+  .bars div{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mut);margin:4px 0}
+  .bars i{flex:1;height:6px;border-radius:3px;background:var(--card2);position:relative;overflow:hidden}
+  .bars i::after{content:"";position:absolute;inset:0;width:var(--w);background:var(--acc);border-radius:3px}
+  .bars span{width:105px}
+  .learn{font-size:12px;color:var(--mut);margin:10px 0 0}
+  .labels{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+  .labels button{background:var(--card2);border-radius:14px;padding:10px 2px;font-size:26px;display:flex;flex-direction:column;align-items:center}
+  .labels button small{font-size:10.5px;color:var(--mut);margin-top:2px}
+  .labels button:active,.labels button.sel{background:var(--ok);color:#111}
+  .labels button.sel small{color:#111}
+  .later{background:none;color:var(--mut);width:100%;padding:10px;font-size:14px}
+  .pend{display:flex;align-items:center;gap:6px;padding:8px 0;border-top:1px solid #ffffff10}
+  .pend .t{flex:1;font-size:13px;color:var(--mut)}
+  .pend button{background:var(--card2);border-radius:10px;width:38px;height:38px;font-size:18px}
+  .menu p{margin:6px 0;font-size:14px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .row button,.row label,.row a{background:var(--card2);border-radius:12px;padding:10px 12px;font-size:14px;cursor:pointer;color:var(--tx);text-decoration:none}
+  .danger{color:#ff8a8a!important}
+  .note{font-size:12px;color:var(--mut);margin-top:10px}
+  input[type=text]{width:100%;font:inherit;font-size:17px;padding:14px;border-radius:14px;border:1px solid #ffffff22;background:var(--card2);color:var(--tx);margin:6px 0 10px}
+  .big{width:100%;padding:16px;border-radius:16px;font-size:17px;font-weight:600;background:linear-gradient(160deg,#ff7aa8,#c45ad8);color:#fff}
+  .big.alt{background:var(--card2)}
+  .or{text-align:center;color:var(--mut);margin:16px 0;font-size:13px}
+  code.fam{font-size:18px;letter-spacing:1px;color:var(--ok)}
+  #toast{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 14px);max-width:496px;margin:0 auto;background:#3a3550;border-radius:16px;
+         padding:12px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;box-shadow:0 8px 24px #0008;font-size:15px;z-index:9}
+  #toast span{flex:1;min-width:140px}
+  #toast button{background:#ffffff18;border-radius:10px;padding:8px 10px;font-size:14px}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <!-- Pantalla de configuración (solo la primera vez, si hay Firebase) -->
+  <section id="setup" hidden>
+    <h1>¿Qué tiene? 👶</h1>
+    <p class="why">Una sola vez: así todos los que la cuidan ven lo mismo.</p>
+    <div class="card">
+      <h3 style="margin-top:0">¿Quién eres?</h3>
+      <input type="text" id="nameIn" placeholder="Ej: Mamá, Abuela, Tía Ana" maxlength="20" autocomplete="off">
+      <div id="joinBox">
+        <h3>Código de familia</h3>
+        <input type="text" id="codeIn" placeholder="Ej: K7P3-Q9XD-M2RT" autocomplete="off" autocapitalize="characters">
+        <button class="big" id="joinBtn">Unirme</button>
+      </div>
+      <p class="or">— o, si eres la primera persona —</p>
+      <button class="big alt" id="createBtn">Crear familia nueva</button>
+    </div>
+  </section>
+
+  <section id="app" hidden>
+    <header>
+      <h1>¿Qué tiene?</h1>
+      <span class="sync" id="sync"></span>
+      <button class="icon-btn" id="menuBtn" aria-label="Menú">⋯</button>
+    </header>
+
+    <section class="status" id="status"></section>
+
+    <button class="cry" id="cryBtn">
+      <span id="cryTxt">Está llorando</span>
+      <small id="crySub">Toca y acerca el celular</small>
+      <span class="bar" id="bar"></span>
+    </button>
+    <button class="skip" id="skipBtn" hidden>Saltar grabación</button>
+
+    <section id="result" class="card" hidden></section>
+
+    <section class="quick">
+      <button data-ev="feed">🍼<span>Comió</span></button>
+      <button id="sleepBtn">😴<span>Se durmió</span></button>
+      <button data-ev="diaper">🧷<span>Pañal</span></button>
+    </section>
+
+    <section id="pending"></section>
+    <section id="menu" class="card menu" hidden></section>
+  </section>
+</main>
+<div id="toast" hidden></div>
+
+<script src="firebase-config.js"></script>
+<script type="module">
+/* ====== Etiquetas ====== */
+const LABELS = {
+  hambre: { t: 'Hambre',       s: 'Hambre', e: '🍼', tip: 'Ofrécele pecho o tetero.' },
+  sueno:  { t: 'Sueño',        s: 'Sueño',  e: '😴', tip: 'Baja luces y ruido, arrúllala o envuélvela.' },
+  panal:  { t: 'Pañal',        s: 'Pañal',  e: '🧷', tip: 'Revisa y cambia el pañal.' },
+  temp:   { t: 'Frío / calor', s: 'Temp.',  e: '🌡️', tip: 'Toca su nuca o pecho: si suda, quítale ropa; si está fría, abrígala.' },
+  otro:   { t: 'Otro (gases, brazos)', s: 'Otro', e: '🤱', tip: 'Prueba sacarle gases o cargarla piel con piel.' }
+};
+const KEYS = Object.keys(LABELS);
+const REC_SECONDS = 6;
+const FB_VERSION = '10.12.2';
+const CFG = window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey ? window.FIREBASE_CONFIG : null;
+
+const $ = id => document.getElementById(id);
+const now = () => Date.now();
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+const mins = t => t == null ? null : (now() - t) / 60000;
+const clip = (x, a, b) => Math.max(a, Math.min(b, x));
+const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} };
+
+/* ====== Almacenamiento: local o nube (Firebase) ====== */
+const LOCAL_KEY = 'llanto.v1';
+function loadLocal() {
+  try { const d = JSON.parse(lsGet(LOCAL_KEY)); if (d && d.events && d.cries) return d; } catch (e) {}
+  return { events: [], cries: [] };
+}
+let D = loadLocal();
+let cloud = null;                 // se llena si hay Firebase + familia
+let FAM = lsGet('llanto.fam');
+let ME = lsGet('llanto.name') || '';
+
+function saveLocal() { if (!cloud) lsSet(LOCAL_KEY, JSON.stringify(D)); }
+const clean = o => JSON.parse(JSON.stringify(o));
+function persist(col, obj) { cloud ? cloud.set(col, obj) : saveLocal(); }
+function unpersist(col, id) { cloud ? cloud.del(col, id) : saveLocal(); }
+
+function setSync(t) { $('sync').textContent = t; }
+window.addEventListener('online', () => cloud && setSync('☁️ en línea'));
+window.addEventListener('offline', () => cloud && setSync('📴 sin señal · se sube luego'));
+
+async function initCloud(code) {
+  const base = `https://www.gstatic.com/firebasejs/${FB_VERSION}/`;
+  const [{ initializeApp }, A, F] = await Promise.all([
+    import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore.js')
+  ]);
+  const app = initializeApp(CFG);
+  const auth = A.getAuth(app);
+  await new Promise(res => { const u = A.onAuthStateChanged(auth, () => { u(); res(); }); });
+  if (!auth.currentUser) await A.signInAnonymously(auth);
+  let db;
+  try { db = F.initializeFirestore(app, { localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) }); }
+  catch (e) { db = F.getFirestore(app); }
+  const col = n => F.collection(db, 'families', code, n);
+  const fail = e => { console.error(e); setSync('⚠️ error al sincronizar'); };
+  cloud = {
+    set: (n, o) => F.setDoc(F.doc(col(n), o.id), clean(o)).catch(fail),
+    del: (n, id) => F.deleteDoc(F.doc(col(n), id)).catch(fail),
+    async bulk(n, arr, del = false) {
+      for (let i = 0; i < arr.length; i += 400) {
+        const b = F.writeBatch(db);
+        arr.slice(i, i + 400).forEach(o => del ? b.delete(F.doc(col(n), o.id)) : b.set(F.doc(col(n), o.id), clean(o)));
+        await b.commit();
+      }
+    }
+  };
+  // Registrarse como miembro de la familia (lo exigen las reglas de seguridad)
+  const member = F.setDoc(F.doc(db, 'families', code, 'members', auth.currentUser.uid), { name: ME, t: now() }, { merge: true });
+  await Promise.race([member, new Promise(r => setTimeout(r, 5000))]).catch(fail);
+  const since = now() - 120 * 864e5;
+  const listen = (n, tries = 0) => F.onSnapshot(
+    F.query(col(n), F.where('t', '>=', since)),
+    snap => { D[n] = snap.docs.map(d => d.data()); setSync(navigator.onLine ? '☁️ en línea' : '📴 sin señal · se sube luego'); render(); },
+    err => { fail(err); if (tries < 5) setTimeout(() => listen(n, tries + 1), 4000); }
+  );
+  D = { events: [], cries: [] };
+  listen('events'); listen('cries');
+}
+
+/* ====== Eventos ====== */
+function addEvent(type, t = now()) { const e = { id: uid(), type, t, by: ME }; D.events.push(e); persist('events', e); return e; }
+function removeEvent(id) { D.events = D.events.filter(e => e.id !== id); unpersist('events', id); }
+function shiftEvent(id, minutes) {
+  const e = D.events.find(x => x.id === id); if (!e) return;
+  e.t -= minutes * 60000; persist('events', e);
+}
+function last(types) {
+  types = [].concat(types); let r = null;
+  for (const e of D.events) if (types.includes(e.type) && (!r || e.t > r.t)) r = e;
+  return r;
+}
+function median(a) {
+  if (!a.length) return null;
+  a = [...a].sort((x, y) => x - y); const m = a.length >> 1;
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+}
+/* Ritmos aprendidos de ella */
+function feedInterval() {
+  const f = D.events.filter(e => e.type === 'feed').map(e => e.t).sort((a, b) => a - b), d = [];
+  for (let i = 1; i < f.length; i++) { const x = (f[i] - f[i - 1]) / 60000; if (x >= 30 && x <= 360) d.push(x); }
+  return median(d.slice(-15)) || 180;
+}
+function wakeWindow() {
+  const ev = D.events.filter(e => e.type === 'sleep' || e.type === 'wake').sort((a, b) => a.t - b.t), d = [];
+  for (let i = 1; i < ev.length; i++)
+    if (ev[i - 1].type === 'wake' && ev[i].type === 'sleep') { const x = (ev[i].t - ev[i - 1].t) / 60000; if (x >= 20 && x <= 240) d.push(x); }
+  return median(d.slice(-15)) || 80;
+}
+function asleep() { const l = last(['sleep', 'wake']); return !!l && l.type === 'sleep'; }
+function getCtx() {
+  const f = last('feed'), dp = last('diaper'), sw = last(['sleep', 'wake']), d = new Date();
+  return {
+    sinceFeed: f ? mins(f.t) : null,
+    awake: sw ? (sw.type === 'wake' ? mins(sw.t) : 0) : null,
+    sinceDiaper: dp ? mins(dp.t) : null,
+    hour: d.getHours() + d.getMinutes() / 60,
+    feedInt: feedInterval(), wakeWin: wakeWindow()
+  };
+}
+
+/* ====== Predicción ====== */
+const sig = (x, mid, w) => 1 / (1 + Math.exp(-(x - mid) / w));
+function normP(s) { const t = KEYS.reduce((a, k) => a + s[k], 0) || 1, o = {}; KEYS.forEach(k => o[k] = s[k] / t); return o; }
+function prior(c) {
+  return normP({
+    hambre: c.sinceFeed == null ? 0.35 : 0.05 + 0.9 * sig(c.sinceFeed, c.feedInt * 0.85, 15),
+    sueno:  c.awake == null ? 0.3 : 0.05 + 0.85 * sig(c.awake, c.wakeWin * 0.9, 12),
+    panal:  c.sinceDiaper == null ? 0.3 : 0.05 + 0.7 * sig(c.sinceDiaper, 150, 25),
+    temp: 0.12, otro: 0.15
+  });
+}
+function ctxVec(c) {
+  return [
+    clip(c.sinceFeed == null ? 1 : c.sinceFeed / c.feedInt, 0, 3),
+    clip(c.awake == null ? 1 : c.awake / c.wakeWin, 0, 3),
+    clip(c.sinceDiaper == null ? 1 : c.sinceDiaper / 180, 0, 3),
+    Math.sin(2 * Math.PI * c.hour / 24), Math.cos(2 * Math.PI * c.hour / 24)
+  ];
+}
+function knn(cur) {
+  const useAudio = !!cur.audio;
+  const train = D.cries.filter(c => c.label && c.id !== cur.id && (!useAudio || (c.audio && c.audio.length === cur.audio.length)));
+  if (train.length < 3) return null;
+  const vec = c => useAudio ? ctxVec(c.ctx).concat(c.audio) : ctxVec(c.ctx);
+  const X = train.map(vec), q = vec(cur), dim = q.length;
+  const mean = Array(dim).fill(0), sd = Array(dim).fill(0);
+  X.forEach(v => v.forEach((x, i) => mean[i] += x / X.length));
+  X.forEach(v => v.forEach((x, i) => sd[i] += (x - mean[i]) ** 2 / X.length));
+  for (let i = 0; i < dim; i++) sd[i] = Math.max(Math.sqrt(sd[i]), 0.05);
+  const wDim = i => i < 5 ? 1 : 0.6;
+  const dist = v => Math.sqrt(v.reduce((a, x, i) => a + wDim(i) * ((x - q[i]) / sd[i]) ** 2, 0));
+  const nb = train.map((c, i) => ({ l: c.label, d: dist(X[i]) })).sort((a, b) => a.d - b.d).slice(0, Math.min(7, train.length));
+  const s = {}; KEYS.forEach(k => s[k] = 0.2);
+  nb.forEach(n => s[n.l] += 1 / (n.d + 0.3));
+  return { p: normP(s), n: train.length };
+}
+function predict(cur) {
+  const p = prior(cur.ctx), r = knn(cur);
+  if (!r) return { p, w: 0 };
+  const w = Math.min(0.85, r.n / 40), o = {};
+  KEYS.forEach(k => o[k] = (1 - w) * p[k] + w * r.p[k]);
+  return { p: normP(o), w };
+}
+const topOf = p => KEYS.slice().sort((a, b) => p[b] - p[a])[0];
+
+/* ====== Audio (se analiza en el celular, nunca se sube) ====== */
+function frameFeatures(td, fd, sr, N) {
+  let e = 0; for (let i = 0; i < N; i++) e += td[i] * td[i];
+  const rms = Math.sqrt(e / N);
+  const binHz = sr / N, bands = [500, 1000, 2000, 4000, 8000], be = [0, 0, 0, 0, 0];
+  let tot = 0, cen = 0; const pw = new Float32Array(fd.length);
+  for (let i = 1; i < fd.length; i++) {
+    const f = i * binHz; if (f > 8000) break;
+    const p = Math.pow(10, fd[i] / 10); pw[i] = p; tot += p; cen += f * p;
+    for (let b = 0; b < 5; b++) if (f < bands[b]) { be[b] += p; break; }
+  }
+  let roll = 0, acc = 0;
+  for (let i = 1; i < pw.length; i++) { acc += pw[i]; if (acc >= 0.85 * tot) { roll = i * binHz; break; } }
+  let pitch = 0;
+  if (rms > 0.01) {
+    const minL = Math.floor(sr / 1000), maxL = Math.ceil(sr / 200), M = N - maxL;
+    let r0 = 0; for (let i = 0; i < M; i++) r0 += td[i] * td[i];
+    let best = 0, bl = 0;
+    for (let l = minL; l <= maxL; l++) {
+      let r = 0; for (let i = 0; i < M; i++) r += td[i] * td[i + l];
+      r /= (r0 || 1); if (r > best) { best = r; bl = l; }
+    }
+    if (best > 0.5) pitch = sr / bl;
+  }
+  return { rms, cen: tot ? cen / tot : 0, roll, be: be.map(x => tot ? x / tot : 0), pitch };
+}
+function aggregate(F, seconds) {
+  if (!F.length) return null;
+  const r = F.map(f => f.rms).sort((a, b) => a - b), p95 = r[Math.floor(r.length * 0.95)];
+  if (p95 < 0.015) return null;
+  const thr = Math.max(0.01, 0.25 * p95), A = F.filter(f => f.rms > thr);
+  if (A.length < 4) return null;
+  let bursts = 0; for (let i = 1; i < F.length; i++) if (F[i].rms > thr && F[i - 1].rms <= thr) bursts++;
+  const m = a => a.reduce((x, y) => x + y, 0) / (a.length || 1);
+  const s = a => { const mu = m(a); return Math.sqrt(m(a.map(x => (x - mu) ** 2))); };
+  const rmsA = A.map(f => f.rms), cen = A.map(f => f.cen / 1000), voiced = A.filter(f => f.pitch > 0), pit = voiced.map(f => f.pitch / 1000);
+  return [
+    A.length / F.length, bursts / seconds, Math.log10(m(rmsA) + 1e-4), s(rmsA) / (m(rmsA) || 1),
+    m(cen), s(cen), m(A.map(f => f.roll / 1000)),
+    ...[0, 1, 2, 3, 4].map(b => m(A.map(f => f.be[b]))),
+    voiced.length / A.length, pit.length ? m(pit) : 0, pit.length ? s(pit) : 0
+  ].map(x => Number.isFinite(x) ? +x.toFixed(4) : 0);
+}
+let rec = null;
+async function recordFeatures(seconds, onTick) {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+  const ac = new (window.AudioContext || window.webkitAudioContext)();
+  try { await ac.resume(); } catch (e) {}
+  const src = ac.createMediaStreamSource(stream), an = ac.createAnalyser();
+  an.fftSize = 2048; an.smoothingTimeConstant = 0; src.connect(an);
+  const sr = ac.sampleRate, N = an.fftSize, td = new Float32Array(N), fd = new Float32Array(an.frequencyBinCount);
+  const F = [], start = performance.now();
+  rec = { stop: false };
+  await new Promise(res => {
+    const iv = setInterval(() => {
+      an.getFloatTimeDomainData(td); an.getFloatFrequencyData(fd);
+      F.push(frameFeatures(td, fd, sr, N));
+      const el = (performance.now() - start) / 1000;
+      onTick(el / seconds, el);
+      if (el >= seconds || rec.stop) { clearInterval(iv); res(); }
+    }, 50);
+  });
+  const skipped = rec.stop; rec = null;
+  stream.getTracks().forEach(t => t.stop()); try { ac.close(); } catch (e) {}
+  return skipped ? { skipped: true } : { audio: aggregate(F, seconds) };
+}
+
+/* ====== Formato ====== */
+function fmt(m) {
+  if (m == null) return '—';
+  m = Math.round(m); if (m < 60) return m + ' min';
+  return Math.floor(m / 60) + ' h ' + String(m % 60).padStart(2, '0');
+}
+const hhmm = t => new Date(t).toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' });
+const esc = s => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function why(k, c) {
+  if (k === 'hambre') return c.sinceFeed == null ? 'Aún no hay tomas registradas' : `Comió hace ${fmt(c.sinceFeed)} · suele comer cada ${fmt(c.feedInt)}`;
+  if (k === 'sueno') return c.awake == null ? 'Aún no hay sueño registrado' : (c.awake === 0 ? 'Estaba dormida' : `Lleva ${fmt(c.awake)} despierta · aguanta ~${fmt(c.wakeWin)}`);
+  if (k === 'panal') return c.sinceDiaper == null ? 'Aún no hay pañales registrados' : `Último pañal hace ${fmt(c.sinceDiaper)}`;
+  return 'Sus horarios no explican bien este llanto';
+}
+
+/* ====== Pantalla ====== */
+let currentCryId = null;
+function render() {
+  if ($('app').hidden) return;
+  const c = getCtx(), by = e => cloud && e && e.by ? `<em>${esc(e.by)}</em>` : '';
+  const chip = (lab, v, alert, e) => `<div class="chip ${alert ? 'alert' : ''}"><b>${fmt(v)}</b><small>${lab}</small>${by(e)}</div>`;
+  const ls = last('sleep');
+  $('status').innerHTML =
+    chip('🍼 desde que comió', c.sinceFeed, c.sinceFeed != null && c.sinceFeed > c.feedInt * 0.85, last('feed')) +
+    (asleep() ? `<div class="chip"><b>Dormida</b><small>😴 ${fmt(mins(ls.t))}</small>${by(ls)}</div>`
+              : chip('☀️ despierta', c.awake, c.awake != null && c.awake > c.wakeWin * 0.9, last('wake'))) +
+    chip('🧷 desde el pañal', c.sinceDiaper, c.sinceDiaper != null && c.sinceDiaper > 150, last('diaper'));
+  const sb = $('sleepBtn'), sl = asleep();
+  sb.innerHTML = sl ? '☀️<span>Se despertó</span>' : '😴<span>Se durmió</span>';
+  sb.classList.toggle('on', sl);
+  renderPending();
+}
+function renderResult(cry) {
+  const P = cry.pred.p, ord = KEYS.slice().sort((a, b) => P[b] - P[a]), top = ord[0], L = LABELS[top];
+  const nLab = D.cries.filter(x => x.label).length;
+  const audioNote = cry.audio ? '' : (cry.noAudio === 'silence' ? ' · no se oyó bien el llanto, usé horarios' : ' · sin audio, usé horarios');
+  $('result').innerHTML = `
+    <div class="top">${L.e}<b>${L.t}</b><span class="pct">${Math.round(P[top] * 100)}%</span></div>
+    <p class="why">${why(top, cry.ctx)}</p>
+    <p class="tip">${L.tip}</p>
+    <div class="bars">${ord.slice(1).map(k => `<div><span>${LABELS[k].e} ${LABELS[k].s}</span><i style="--w:${Math.round(P[k] * 100)}%"></i>${Math.round(P[k] * 100)}%</div>`).join('')}</div>
+    <p class="learn">Aprendiendo de ${nLab} llanto${nLab === 1 ? '' : 's'} · lo aprendido pesa ${Math.round(cry.pred.w * 100)}%${audioNote}</p>
+    <h3>¿Qué la calmó? (un toque)</h3>
+    <div class="labels">${KEYS.map(k => `<button data-l="${k}">${LABELS[k].e}<small>${LABELS[k].s}</small></button>`).join('')}</div>
+    <button class="later" id="laterBtn">Lo marco después</button>`;
+  $('result').hidden = false;
+  $('result').querySelectorAll('[data-l]').forEach(b => b.onclick = () => labelCry(cry.id, b.dataset.l, true));
+  $('laterBtn').onclick = () => { $('result').hidden = true; render(); };
+  $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function renderPending() {
+  const shown = $('result').hidden ? null : currentCryId;
+  const P = D.cries.filter(c => !c.label && c.id !== shown && now() - c.t < 48 * 3600e3).sort((a, b) => b.t - a.t).slice(0, 6);
+  $('pending').innerHTML = P.length ? `<div class="card"><h3 style="margin-top:0">Pendientes — ¿qué la calmó?</h3>${P.map(c =>
+    `<div class="pend"><span class="t">${hhmm(c.t)}${cloud && c.by ? ' · ' + esc(c.by) : ''} · sugerí ${LABELS[topOf(c.pred.p)].e}</span>${KEYS.map(k => `<button data-c="${c.id}" data-l="${k}">${LABELS[k].e}</button>`).join('')}</div>`
+  ).join('')}</div>` : '';
+  $('pending').querySelectorAll('[data-c]').forEach(b => b.onclick = () => labelCry(b.dataset.c, b.dataset.l, false));
+}
+
+/* ====== Etiquetar: un toque = etiqueta + registro automático ====== */
+const AUTO = { hambre: 'feed', panal: 'diaper', sueno: 'sleep' };
+const AUTO_TXT = { feed: 'Comió', diaper: 'Pañal', sleep: 'Se durmió' };
+function labelCry(id, l, fromResult) {
+  const c = D.cries.find(x => x.id === id); if (!c) return;
+  const prev = c.label || null; c.label = l; c.labeledBy = ME; persist('cries', c);
+  let ev = null;
+  if (!prev && now() - c.t < 45 * 60000 && AUTO[l] && !(AUTO[l] === 'sleep' && asleep())) ev = addEvent(AUTO[l]);
+  toast(`${LABELS[l].e} Guardado${ev ? ` · también registré "${AUTO_TXT[ev.type]}"` : ''}`, [
+    { t: 'Deshacer', fn: () => {
+      const cc = D.cries.find(x => x.id === id); if (cc) { cc.label = prev; persist('cries', cc); }
+      if (ev) removeEvent(ev.id); render(); if (fromResult && cc) renderResult(cc);
+    } }
+  ]);
+  if (fromResult) $('result').hidden = true;
+  render();
+}
+
+/* ====== Botón grande de llanto ====== */
+let busy = false;
+$('cryBtn').onclick = async () => {
+  if (busy) return; busy = true;
+  const ctx = getCtx();
+  $('cryTxt').textContent = 'Escuchando…'; $('skipBtn').hidden = false;
+  let audio = null, noAudio = null;
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('sin mic');
+    const r = await recordFeatures(REC_SECONDS, (p, el) => {
+      $('bar').style.width = (p * 100) + '%';
+      $('crySub').textContent = `Acércalo a ella · ${Math.max(0, Math.ceil(REC_SECONDS - el))} s`;
+    });
+    if (r.skipped) noAudio = 'skip'; else { audio = r.audio; if (!audio) noAudio = 'silence'; }
+  } catch (e) {
+    noAudio = 'nomic';
+    toast('No pude usar el micrófono: uso solo los horarios. Revisa el permiso del navegador.');
+  }
+  const cry = { id: uid(), t: now(), ctx, audio, noAudio, label: null, by: ME };
+  cry.pred = predict(cry);
+  D.cries.push(cry); persist('cries', cry);
+  currentCryId = cry.id;
+  $('cryTxt').textContent = 'Está llorando'; $('crySub').textContent = 'Toca y acerca el celular';
+  $('bar').style.width = '0'; $('skipBtn').hidden = true; busy = false;
+  renderResult(cry); render();
+};
+$('skipBtn').onclick = () => { if (rec) rec.stop = true; };
+
+/* ====== Registros rápidos ====== */
+function quickLog(type, label) {
+  const e = addEvent(type); let back = 0;
+  render();
+  toast(`${label} · registrado`, [
+    { t: 'Deshacer', fn: () => { removeEvent(e.id); render(); } },
+    { t: 'Fue hace 15 min', keep: true, fn: span => { shiftEvent(e.id, 15); back += 15; render(); span.textContent = `${label} · hace ${back} min`; } }
+  ]);
+}
+document.querySelectorAll('[data-ev]').forEach(b => b.onclick = () =>
+  quickLog(b.dataset.ev, b.dataset.ev === 'feed' ? '🍼 Comió' : '🧷 Pañal'));
+$('sleepBtn').onclick = () => asleep() ? quickLog('wake', '☀️ Se despertó') : quickLog('sleep', '😴 Se durmió');
+
+/* ====== Toast ====== */
+let toastTimer = null;
+function toast(text, actions = []) {
+  const el = $('toast'); el.innerHTML = ''; el.hidden = false;
+  const span = document.createElement('span'); span.textContent = text; el.appendChild(span);
+  const arm = () => { clearTimeout(toastTimer); toastTimer = setTimeout(() => el.hidden = true, 7000); };
+  actions.forEach(a => {
+    const b = document.createElement('button'); b.textContent = a.t;
+    b.onclick = () => { a.fn(span); if (!a.keep) el.hidden = true; else arm(); };
+    el.appendChild(b);
+  });
+  arm();
+}
+
+/* ====== Menú ====== */
+let wipeArmed = false;
+$('menuBtn').onclick = () => {
+  const m = $('menu');
+  if (!m.hidden) { m.hidden = true; return; }
+  const cnt = {}; KEYS.forEach(k => cnt[k] = 0); D.cries.forEach(c => c.label && cnt[c.label]++);
+  const lab = D.cries.filter(c => c.label), hits = lab.filter(c => topOf(c.pred.p) === c.label).length;
+  const link = `${location.origin}${location.pathname}?f=${FAM}`;
+  const famBox = cloud ? `
+    <h3 style="margin-top:0">Familia</h3>
+    <p>Código: <code class="fam">${esc(FAM)}</code> · Tú eres <b>${esc(ME)}</b></p>
+    <div class="row">
+      <a href="https://wa.me/?text=${encodeURIComponent('Únete a la app de llantos de la bebé (ábrelo en el celular y agrégalo a la pantalla de inicio): ' + link)}" target="_blank" rel="noopener">📲 Invitar por WhatsApp</a>
+      <button id="leaveBtn">Salir de la familia</button>
+    </div>` :
+    `<p class="note">Modo solo este celular. Para compartir con otros cuidadores, configura <b>firebase-config.js</b>.</p>`;
+  m.innerHTML = famBox + `
+    <h3>Lo que va aprendiendo</h3>
+    <p>${KEYS.map(k => `${LABELS[k].e} ${cnt[k]}`).join(' · ')}</p>
+    <p>Aciertos de la sugerencia: <b>${lab.length ? Math.round(hits / lab.length * 100) + '%' : '—'}</b> (${hits}/${lab.length})</p>
+    <p>Suele comer cada <b>${fmt(feedInterval())}</b> · aguanta despierta <b>~${fmt(wakeWindow())}</b></p>
+    <div class="row">
+      <button id="expBtn">⬇️ Descargar respaldo</button>
+      <label>⬆️ Restaurar<input type="file" id="impIn" accept="application/json" hidden></label>
+      <button id="wipeBtn" class="danger">Borrar todo</button>
+    </div>
+    <p class="note">El audio nunca se sube: solo se guardan números que describen el llanto.</p>
+    <p class="note">Es una ayuda, no un diagnóstico. Llanto muy agudo, que no se calma con nada, fiebre, rechazo a comer o decaimiento: llama al pediatra.</p>`;
+  m.hidden = false; wipeArmed = false;
+  if ($('leaveBtn')) $('leaveBtn').onclick = () => { lsSet('llanto.fam', null); location.href = location.pathname; };
+  $('expBtn').onclick = () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(D)], { type: 'application/json' }));
+    a.download = `llantos-respaldo-${new Date().toISOString().slice(0, 10)}.json`; a.click();
+  };
+  $('impIn').onchange = async ev => {
+    try {
+      const d = JSON.parse(await ev.target.files[0].text());
+      if (!d.events || !d.cries) throw 0;
+      if (cloud) { await cloud.bulk('events', d.events); await cloud.bulk('cries', d.cries); }
+      else { D = d; saveLocal(); }
+      render(); m.hidden = true; toast('Respaldo restaurado ✓');
+    } catch (e) { toast('Ese archivo no es un respaldo válido'); }
+  };
+  $('wipeBtn').onclick = async () => {
+    if (!wipeArmed) { wipeArmed = true; $('wipeBtn').textContent = cloud ? 'Borra para TODOS · toca otra vez' : 'Toca otra vez para confirmar'; return; }
+    if (cloud) { await cloud.bulk('events', D.events, true); await cloud.bulk('cries', D.cries, true); }
+    else { D = { events: [], cries: [] }; saveLocal(); }
+    render(); m.hidden = true; $('result').hidden = true; toast('Datos borrados');
+  };
+};
+
+/* ====== Arranque ====== */
+function genCode() {
+  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', r = new Uint32Array(12);
+  crypto.getRandomValues(r);
+  const s = Array.from(r, x => A[x % A.length]).join('');
+  return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8, 12)}`;
+}
+function showApp() { $('setup').hidden = true; $('app').hidden = false; render(); }
+
+async function start() {
+  if (!CFG) { showApp(); return; }                 // sin Firebase: modo local
+  const urlF = new URLSearchParams(location.search).get('f');
+  if (FAM && ME && (!urlF || urlF === FAM)) {
+    showApp(); setSync('⏳ conectando…');
+    try { await initCloud(FAM); } catch (e) { console.error(e); setSync('⚠️ sin conexión a la nube'); }
+    return;
+  }
+  // Configuración inicial
+  $('setup').hidden = false;
+  $('nameIn').value = ME;
+  if (urlF) $('codeIn').value = urlF;
+  const go = async (code, uploadLocal) => {
+    const name = $('nameIn').value.trim();
+    if (!name) { toast('Escribe tu nombre (ej. Mamá)'); $('nameIn').focus(); return; }
+    ME = name; FAM = code; lsSet('llanto.name', ME); lsSet('llanto.fam', FAM);
+    const local = loadLocal();
+    showApp(); setSync('⏳ conectando…');
+    try {
+      await initCloud(FAM);
+      if (uploadLocal && (local.events.length || local.cries.length)) {
+        await cloud.bulk('events', local.events); await cloud.bulk('cries', local.cries);
+        toast('Subí los registros que ya tenías ✓');
+      }
+      history.replaceState(null, '', location.pathname);
+    } catch (e) { console.error(e); setSync('⚠️ sin conexión a la nube'); toast('No pude conectar. Revisa internet y vuelve a abrir.'); }
+  };
+  $('createBtn').onclick = () => go(genCode(), true);
+  $('joinBtn').onclick = () => {
+    const code = $('codeIn').value.trim().toUpperCase().replace(/\s+/g, '');
+    if (!/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(code)) { toast('Ese código no se ve bien. Debe ser como K7P3-Q9XD-M2RT'); return; }
+    go(code, false);
+  };
+}
+start();
+setInterval(render, 30000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
