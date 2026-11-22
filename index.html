@@ -49,14 +49,16 @@
   .bars i::after{content:"";position:absolute;inset:0;width:var(--w);background:var(--acc);border-radius:3px}
   .bars span{width:105px}
   .learn{font-size:12px;color:var(--mut);margin:10px 0 0}
-  .labels{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+  .labels{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
   .labels button{background:var(--card2);border-radius:14px;padding:10px 2px;font-size:26px;display:flex;flex-direction:column;align-items:center}
   .labels button small{font-size:10.5px;color:var(--mut);margin-top:2px}
   .labels button:active,.labels button.sel{background:var(--ok);color:#111}
   .labels button.sel small{color:#111}
   .later{background:none;color:var(--mut);width:100%;padding:10px;font-size:14px}
-  .pend{display:flex;align-items:center;gap:6px;padding:8px 0;border-top:1px solid #ffffff10}
-  .pend .t{flex:1;font-size:13px;color:var(--mut)}
+  .pend{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 0;border-top:1px solid #ffffff10}
+  .pend .t{flex:1 1 100%;font-size:13px;color:var(--mut)}
+  .pend .pb{display:flex;gap:5px;width:100%}
+  .pend .pb button{flex:1}
   .pend button{background:var(--card2);border-radius:10px;width:34px;height:38px;font-size:17px;padding:0}
   .wx{font-size:12px;color:var(--mut)}
   .menu p{margin:6px 0;font-size:14px}
@@ -199,7 +201,8 @@ const LABELS = {
   panal:  { t: 'Pañal',        s: 'Pañal',  e: '🧷', tip: 'Revisa y cambia el pañal.' },
   frio:   { t: 'Frío',         s: 'Frío',   e: '🥶', tip: 'Tócale la nuca o el pecho: si están fríos, ponle una capa más (una más que tú) o una cobija.' },
   calor:  { t: 'Calor',        s: 'Calor',  e: '🥵', tip: 'Si la nuca está sudada o caliente, quítale una capa y ventila el cuarto. Manos y pies fríos son normales.' },
-  otro:   { t: 'Otro (gases, brazos)', s: 'Otro', e: '🤱', tip: 'Prueba sacarle gases o cargarla piel con piel.' }
+  colico: { t: 'Cólico / gases', s: 'Cólico', e: '😣', tip: 'Barriguita: bicicleta con las piernas, masaje en círculos como las manecillas del reloj, piel con piel o boca abajo sobre tu antebrazo. Si puja (disquecia), dobla sus rodillas hacia la barriga para ayudarla. Vómito verde, sangre en la popó, fiebre o barriga muy hinchada sin querer comer: pediatra.' },
+  otro:   { t: 'Otro (brazos, mimos)', s: 'Otro', e: '🫂', tip: 'Cárgala piel con piel, arrúllala o ponle ruido blanco.' }
 };
 const KEYS = Object.keys(LABELS);
 const OLD = { temp: { t: 'Frío / calor', s: 'Temp.', e: '🌡️' } };     // etiqueta de versiones anteriores
@@ -310,6 +313,7 @@ function getCtx() {
     sinceFeed: f ? mins(f.t) : null,
     awake: sw ? (sw.type === 'wake' ? mins(sw.t) : 0) : null,
     sinceDiaper: dp ? mins(dp.t) : null,
+    sincePoop: (() => { const pp = D.events.filter(e => e.type === 'diaper' && e.poop).sort((a, b) => b.t - a.t)[0]; return pp ? mins(pp.t) : null; })(),
     hour: d.getHours() + d.getMinutes() / 60,
     feedInt: feedInterval(), wakeWin: wakeWindow(),
     tOut: outsideTemp()
@@ -325,7 +329,8 @@ function prior(c) {
     sueno:  c.awake == null ? 0.3 : 0.05 + 0.85 * sig(c.awake, c.wakeWin * 0.9, 12),
     panal:  c.sinceDiaper == null ? 0.3 : 0.05 + 0.7 * sig(c.sinceDiaper, 150, 25),
     ...tempPrior(c),
-    otro: 0.15
+    colico: colicPrior(c),
+    otro: 0.12
   });
 }
 function tempPrior(c) {
@@ -336,14 +341,23 @@ function tempPrior(c) {
   const night = c.hour < 6 || c.hour >= 22, afternoon = c.hour >= 12 && c.hour < 17;
   return { frio: night ? 0.09 : 0.05, calor: afternoon ? 0.08 : 0.05 };
 }
-const CTX_DIMS = 6;
+// Cólico/gases/disquecia: más típico al final de la tarde/noche, un rato después de comer y si lleva mucho sin hacer popó
+function colicPrior(c) {
+  let p = 0.05;
+  if (c.hour >= 17 && c.hour < 23) p += 0.06;
+  if (c.sinceFeed != null && c.sinceFeed >= 10 && c.sinceFeed <= 75) p += 0.06;
+  if (c.sincePoop != null) p += 0.12 * sig(c.sincePoop, 24 * 60, 120);
+  return p;
+}
+const CTX_DIMS = 7;
 function ctxVec(c) {
   return [
     clip(c.sinceFeed == null ? 1 : c.sinceFeed / c.feedInt, 0, 3),
     clip(c.awake == null ? 1 : c.awake / c.wakeWin, 0, 3),
     clip(c.sinceDiaper == null ? 1 : c.sinceDiaper / 180, 0, 3),
     Math.sin(2 * Math.PI * c.hour / 24), Math.cos(2 * Math.PI * c.hour / 24),
-    c.tOut == null ? 0 : clip((c.tOut - 20) / 5, -3, 3)
+    c.tOut == null ? 0 : clip((c.tOut - 20) / 5, -3, 3),
+    c.sincePoop == null ? 0.5 : clip(c.sincePoop / 1440, 0, 3)
   ];
 }
 function knn(cur) {
@@ -494,6 +508,13 @@ function why(k, c) {
   if (k === 'hambre') return c.sinceFeed == null ? 'Aún no hay tomas registradas' : `Comió hace ${fmt(c.sinceFeed)} · suele comer cada ${fmt(c.feedInt)}`;
   if (k === 'sueno') return c.awake == null ? 'Aún no hay sueño registrado' : (c.awake === 0 ? 'Estaba dormida' : `Lleva ${fmt(c.awake)} despierta · aguanta ~${fmt(c.wakeWin)}`);
   if (k === 'panal') return c.sinceDiaper == null ? 'Aún no hay pañales registrados' : `Último pañal hace ${fmt(c.sinceDiaper)}`;
+  if (k === 'colico') {
+    const r = [];
+    if (c.sinceFeed != null && c.sinceFeed >= 10 && c.sinceFeed <= 75) r.push(`comió hace ${fmt(c.sinceFeed)}`);
+    if (c.sincePoop != null) r.push(`última popó hace ${fmt(c.sincePoop)}`);
+    if (c.hour >= 17 && c.hour < 23) r.push('es la hora típica de cólicos');
+    return r.length ? r.join(' · ').replace(/^./, x => x.toUpperCase()) : 'Por cómo suena y su historial';
+  }
   if (k === 'frio' || k === 'calor') {
     const h = c.hour < 6 ? ' · es de madrugada' : (c.hour >= 12 && c.hour < 17 ? ' · es la hora más caliente' : '');
     return c.tOut != null ? `Afuera hay ${Math.round(c.tOut)} °C${h}` : `Sin dato del clima${h}`;
@@ -516,7 +537,7 @@ function render() {
     chip('🍼 desde que comió', c.sinceFeed, c.sinceFeed != null && c.sinceFeed > c.feedInt * 0.85, lf, feedDetail(lf)) +
     (asleep() ? `<div class="chip"><b>Dormida</b><small>😴 ${fmt(mins(ls.t))}</small>${by(ls)}</div>`
               : chip('☀️ despierta', c.awake, c.awake != null && c.awake > c.wakeWin * 0.9, last('wake'))) +
-    chip('🧷 desde el pañal', c.sinceDiaper, c.sinceDiaper != null && c.sinceDiaper > 150, last('diaper'));
+    chip('🧷 desde el pañal', c.sinceDiaper, c.sinceDiaper != null && c.sinceDiaper > 150, last('diaper'), c.sincePoop != null ? `💩 hace ${fmt(c.sincePoop)}` : '');
   const sb = $('sleepBtn'), sl = asleep();
   sb.innerHTML = sl ? '☀️<span>Se despertó</span>' : '😴<span>Se durmió</span>';
   sb.classList.toggle('on', sl);
@@ -700,7 +721,7 @@ function renderPending() {
   const shown = $('result').hidden ? null : currentCryId;
   const P = D.cries.filter(c => !c.label && c.id !== shown && now() - c.t < 48 * 3600e3).sort((a, b) => b.t - a.t).slice(0, 6);
   $('pending').innerHTML = P.length ? `<div class="card"><h3 style="margin-top:0">Pendientes — ¿qué la calmó?</h3>${P.map(c =>
-    `<div class="pend"><span class="t">${hhmm(c.t)}${cloud && c.by ? ' · ' + esc(c.by) : ''} · sugerí ${Lb(topOf(c.pred.p)).e}</span>${KEYS.map(k => `<button data-c="${c.id}" data-l="${k}">${LABELS[k].e}</button>`).join('')}</div>`
+    `<div class="pend"><span class="t">${hhmm(c.t)}${cloud && c.by ? ' · ' + esc(c.by) : ''} · sugerí ${Lb(topOf(c.pred.p)).e}</span><div class="pb">${KEYS.map(k => `<button data-c="${c.id}" data-l="${k}">${LABELS[k].e}</button>`).join('')}</div></div>`
   ).join('')}</div>` : '';
   $('pending').querySelectorAll('[data-c]').forEach(b => b.onclick = () => labelCry(b.dataset.c, b.dataset.l, false));
 }
@@ -763,7 +784,17 @@ function quickLog(type, label, extra = {}, t = now(), allowShift = true) {
   toast(`${label} · registrado`, acts);
 }
 document.querySelectorAll('[data-ev]').forEach(b => b.onclick = () =>
-  b.dataset.ev === 'feed' ? openFeedSheet() : quickLog('diaper', '🧷 Pañal'));
+  b.dataset.ev === 'feed' ? openFeedSheet() : logDiaper());
+function logDiaper() {
+  const e = addEvent('diaper'); let back = 0;
+  render();
+  const txt = () => { const x = D.events.find(y => y.id === e.id); return `🧷 Pañal${x && x.poop ? ' · 💩 con popó' : ''}${back ? ` · hace ${back} min` : ''}`; };
+  toast(`${txt()} · registrado`, [
+    { t: 'Deshacer', fn: () => { removeEvent(e.id); render(); } },
+    { t: '💩 Hubo popó', keep: true, fn: span => { const x = D.events.find(y => y.id === e.id); if (!x) return; x.poop = !x.poop; persist('events', x); render(); span.textContent = txt(); } },
+    { t: 'Fue hace 15 min', keep: true, fn: span => { shiftEvent(e.id, 15); back += 15; render(); span.textContent = txt(); } }
+  ]);
+}
 $('sleepBtn').onclick = () => asleep() ? quickLog('wake', '☀️ Se despertó') : quickLog('sleep', '😴 Se durmió');
 
 /* ====== Toast ====== */
@@ -826,7 +857,7 @@ function buildDay(off) {
     } else if (f.mode === 'bottle') items.push({ t: f.t, h: hhmm(f.t), x: `🍼 Tetero ${String(f.oz).replace('.', ',')} oz`, by: who(f) });
     else items.push({ t: f.t, h: hhmm(f.t), x: '🍼 Comió', by: who(f) });
   });
-  diapers.forEach(e => items.push({ t: e.t, h: hhmm(e.t), x: '🧷 Cambio de pañal', by: who(e) }));
+  diapers.forEach(e => items.push({ t: e.t, h: hhmm(e.t), x: `🧷 Cambio de pañal${e.poop ? ' · 💩 popó' : ''}`, by: who(e) }));
   cries.forEach(c => items.push({ t: c.t, h: hhmm(c.t), x: `😢 Lloró${c.label ? ` → la calmó: ${Lb(c.label).e} ${Lb(c.label).t}` : ` · sugerí ${Lb(topOf(c.pred.p)).e} (sin marcar)`}`, by: who(c) }));
   sleeps.forEach(s => items.push({ t: s.ca, h: `${s.a < d0 ? 'ayer ' + hhmm(s.a) : hhmm(s.ca)}–${s.on && s.cb >= now() - 1000 ? 'ahora' : hhmm(s.cb)}`, x: `😴 Durmió ${dur(s.cb - s.ca)}${s.on ? ' · sigue dormida' : ''}`, by: who(s) }));
   awakes.forEach(s => items.push({ t: s.ca, h: `${hhmm(s.ca)}–${s.on ? 'ahora' : hhmm(s.cb)}`, x: `☀️ Despierta ${dur(s.cb - s.ca)}`, by: '' }));
@@ -843,7 +874,7 @@ function dayText(R, off) {
     `Resumen de la bebé · ${dayTitle(off, R.d0)}`,
     `🍼 ${R.feeds.length} tomas · pecho ${R.breastMin} min · tetero ${R.oz} oz`,
     `😴 Durmió ${dur(R.sleepMs)} · ☀️ despierta ${dur(R.awakeMs)}`,
-    `🧷 ${R.diapers.length} pañales · 😢 ${R.cries.length} llantos`,
+    `🧷 ${R.diapers.length} pañales (💩 ${R.diapers.filter(e => e.poop).length} con popó) · 😢 ${R.cries.length} llantos`,
     '', '— Cronograma —',
     ...R.items.map(i => `${i.h}  ${i.x}${i.by ? ' · ' + i.by : ''}`)
   ].join('\n');
@@ -867,7 +898,7 @@ function openDay(off = 0) {
       <div><b>${R.oz} oz</b><small>🍼 de tetero</small></div>
       <div><b>${dur(R.sleepMs)}</b><small>😴 dormida</small></div>
       <div><b>${dur(R.awakeMs)}</b><small>☀️ despierta</small></div>
-      <div><b>${R.diapers.length}</b><small>🧷 pañales</small></div>
+      <div><b>${R.diapers.length}</b><small>🧷 pañales · 💩 ${R.diapers.filter(e => e.poop).length}</small></div>
     </div>
     <h3>Cronograma de 24 horas</h3>
     <div class="tl">
@@ -988,10 +1019,10 @@ function showApp() {
 const TOUR = [
   { t: '👋 <b>¡Bienvenida!</b> Te muestro en 30 segundos cómo funciona la app. Todo se registra con un solo toque.' },
   { el: '#status', t: '<b>De un vistazo:</b> hace cuánto comió, cuánto lleva despierta y cuándo fue el último pañal. Se pone <b style="color:#c99a1a">amarillo</b> cuando ya le toca.' },
-  { el: '#cryBtn', t: '<b>Cuando llore,</b> toca aquí y acerca el celular a ella unos segundos. Te digo la causa más probable: hambre, sueño, pañal, frío, calor u otra.' },
+  { el: '#cryBtn', t: '<b>Cuando llore,</b> toca aquí y acerca el celular a ella unos segundos. Te digo la causa más probable: hambre, sueño, pañal, frío, calor, cólico/gases u otra.' },
   { el: '[data-ev=feed]', t: '<b>Cuando coma,</b> toca aquí. Eliges <b>pecho</b> (con cronómetro y lado) o <b>tetero</b> (tocas las onzas).' },
   { el: '#sleepBtn', t: '<b>Cuando se duerma</b> toca aquí, y <b>cuando se despierte</b> vuelves a tocar el mismo botón.' },
-  { el: '[data-ev=diaper]', t: '<b>Cada cambio de pañal,</b> un toque aquí.' },
+  { el: '[data-ev=diaper]', t: '<b>Cada cambio de pañal,</b> un toque aquí. Si hubo popó, toca <b>💩 Hubo popó</b> en el aviso de abajo: ayuda a detectar cólicos y estreñimiento.' },
   { el: '#menuBtn', t: '<b>Menú:</b> resumen del día, invitar a la familia por WhatsApp, respaldo y ver este tutorial otra vez.' },
   { t: '⭐ <b>Lo más importante:</b> después de que llore, cuando logres calmarla, marca <b>qué funcionó</b>. Con cada respuesta la app aprende a reconocer sus llantos.<br><br>¿Te equivocaste en algo? Siempre aparece <b>Deshacer</b> abajo.' }
 ];
