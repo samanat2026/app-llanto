@@ -79,6 +79,8 @@
   .who .on-t{color:var(--ok)}
   .age{display:block;width:100%;text-align:left;background:none;color:var(--mut);font-size:14px;padding:0 0 2px}
   .age b{color:var(--acc);font-weight:600}
+  .motto{font-size:13.5px;line-height:1.4;color:#d9cfe6;font-style:italic;margin:4px 0 2px;cursor:pointer;transition:opacity .25s}
+  .motto.hard{color:#ffc3dc}
   input[type=date]{width:100%;font:inherit;font-size:17px;padding:14px;border-radius:14px;border:1px solid #ffffff22;background:var(--card2);color:var(--tx);margin:6px 0 10px;color-scheme:dark}
   .scard{background:linear-gradient(160deg,#2b2750,#1f1c2b);border:1px solid #7b6cf655;border-radius:18px;padding:14px;margin:-6px 0 16px}
   .scard .top{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
@@ -209,6 +211,7 @@
       <button class="icon-btn" id="menuBtn" aria-label="Menú">⋯</button>
     </header>
     <button class="age" id="ageBtn" hidden></button>
+    <p class="motto" id="motto"></p>
 
     <div id="feedBanner"></div>
     <section class="status" id="status"></section>
@@ -631,7 +634,7 @@ function render() {
   sb.classList.toggle('on', sl);
   renderBanner();
   renderPending();
-  renderWxAsk(); showWx(); renderAge(); renderSleepCard();
+  renderWxAsk(); showWx(); renderAge(); renderMotto(); renderSleepCard();
 }
 
 /* ====== Tomas: pecho (cronómetro y lado) o tetero (onzas) ====== */
@@ -1273,6 +1276,84 @@ function ageTxt(birth) {
   if (!parts.length) return '¡nació hoy! 🎉';
   return parts.length === 1 ? parts[0] : parts.slice(0, -1).join(', ') + ' y ' + parts[parts.length - 1];
 }
+/* ====== Frase del día ======
+   Cambia cada día. Si el día viene más difícil de lo normal (más llantos que su promedio) o la madrugada está pesada,
+   muestra frases de ánimo. Tocarla muestra otra. {n} = nombre de la bebé. */
+const MOTTO = {
+  dia: [
+    'No tienes que hacerlo perfecto. Solo tienes que estar, y aquí estás.',
+    'Cada vez que la calmas, ella aprende que el mundo es un lugar seguro.',
+    'Hoy también vas a poder. Un pañal, una toma, un abrazo a la vez.',
+    'Ella no recordará la casa ordenada; recordará cómo se sentía en tus brazos.',
+    'Los días son largos, pero los meses pasan volando. Mira su carita hoy.',
+    'Conocerla toma tiempo. Cada llanto que anotas es un paso para entenderla mejor.',
+    'Pedir ayuda también es cuidar. Nadie cría solo.',
+    'Tu cansancio es la prueba de todo el amor que estás dando.',
+    'Hoy {n} es un poquito más grande que ayer, y tú un poquito más sabia.',
+    'Respira. Lo que hoy parece eterno, en unas semanas será un recuerdo.',
+    'No hay manual para {n}, pero tú la estás escribiendo, día a día.',
+    'Cuidarte a ti también es cuidarla a ella. Come algo, toma agua.',
+    'Eres exactamente la persona que {n} necesita.',
+    'Hay días buenos y días difíciles. Ambos cuentan, ambos pasan.',
+    'Cada noche en vela es una inversión en su tranquilidad.',
+    'Estás aprendiendo su idioma: el de los llantos, los gestos y las miradas.',
+    'Lo estás haciendo mejor de lo que crees.',
+    'Celebra lo pequeño: una siesta larga, una sonrisa, un eructo a tiempo.',
+    'Su corazón late tranquilo cuando escucha el tuyo.',
+    'Hoy no hace falta hacerlo todo. Con lo importante basta.',
+    'Las bebés no necesitan papás perfectos, necesitan papás presentes.',
+    'Tu voz es su canción favorita, aunque cantes desafinado.',
+    'Cada etapa difícil tiene fecha de vencimiento.',
+    'Mírate con la misma ternura con la que la miras a ella.',
+    'El amor no se mide en horas de sueño, pero ojalá hoy duermas un poquito más.',
+    'Un día a la vez. Hoy, solo hoy.',
+    'Ella confía en ti por completo. Confía tú también en ti.',
+    'Detrás de cada llanto hay una necesidad, y tú estás ahí para descubrirla.',
+  ],
+  duro: [
+    'Hoy ha sido un día pesado. No es tu culpa: algunos días los bebés lloran más, y ya.',
+    'Muchos llantos no significan que lo estés haciendo mal. Significa que ella te necesita, y tú estás.',
+    'Si te sientes al límite, está bien dejarla un momento segura en la cuna y respirar. Vuelve cuando estés más tranquila.',
+    'Días así se superan. Mañana puede ser muy distinto.',
+    'Llorar es su única forma de hablar. Hoy tenía mucho que decir.',
+    'Pide relevo si puedes, aunque sean 20 minutos. Te lo mereces.',
+    'Respira profundo tres veces. Tu calma también la calma a ella.',
+    'Hoy no se trata de que deje de llorar, sino de que no llore sola. Y no lo está.',
+    'Los saltos de crecimiento y los cólicos pasan. Lo que queda es todo el tiempo que la tuviste en tus brazos.',
+    'Eres fuerte, pero no tienes que serlo todo el tiempo. Un descanso también es amor.',
+    'Lo más difícil de hoy ya pasó. Lo que viene es más liviano.',
+    'Que hoy haya sido duro no borra lo bien que lo has hecho cada día.',
+  ],
+  noche: [
+    'A esta hora el mundo duerme, pero tú estás cuidando lo más valioso. Gracias.',
+    'Las madrugadas son duras, pero no son para siempre. Esta etapa pasará.',
+    'Mientras la arrullas, recuerda: un día dormirá de largo y extrañarás este momento.',
+    'Noche difícil. Tómala con calma: no hay nada que tengas que resolver ahora, solo acompañarla.',
+    'Si puedes, duerme cuando ella duerma. Lo demás puede esperar.',
+    'No estás sola en la madrugada: miles de mamás y papás están despiertos contigo ahora mismo.',
+  ],
+};
+let mottoBump = 0;
+function dayIndex() { const d = new Date(); return Math.floor((d - d.getTimezoneOffset() * 60000) / 864e5); }
+function hardState() {
+  const N = now(), H = 3600e3, n24 = D.cries.filter(c => N - c.t < 24 * H).length;
+  const old = D.cries.filter(c => N - c.t >= 24 * H && N - c.t < 8 * 24 * H);
+  const days = old.length ? Math.max(1, Math.min(7, (N - Math.min(...old.map(c => c.t))) / (24 * H))) : 0;
+  const avg = days ? old.length / days : null;
+  const hard = avg != null ? n24 >= Math.max(5, avg * 1.4) : n24 >= 8;
+  const h = new Date().getHours(), nightN = D.cries.filter(c => N - c.t < 4 * H && hourOf(c.t) < 6).length;
+  return { hard, night: h < 6 && nightN >= 3 };
+}
+function renderMotto() {
+  const el = $('motto'); if (!el) return;
+  const st = hardState(), kind = st.night ? 'noche' : st.hard ? 'duro' : 'dia', L = MOTTO[kind];
+  const name = BABY && BABY.name ? BABY.name.split(' ')[0] : 'tu bebé';
+  const txt = L[(dayIndex() + mottoBump) % L.length].replace(/\{n\}/g, name);
+  const html = `${kind === 'dia' ? '✨' : kind === 'noche' ? '🌙' : '💗'} ${esc(txt)}`;
+  if (el.dataset.h !== html) { el.dataset.h = html; el.innerHTML = html; }
+  el.className = 'motto' + (kind === 'dia' ? '' : ' hard');
+}
+$('motto').onclick = () => { mottoBump++; const el = $('motto'); el.style.opacity = 0; setTimeout(() => { renderMotto(); el.style.opacity = 1; }, 200); };
 function renderAge() {
   const b = $('ageBtn');
   if (BABY && BABY.birth) {
