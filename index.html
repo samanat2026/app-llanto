@@ -43,6 +43,7 @@
   .top b{font-size:24px}
   .top .pct{margin-left:auto;font-size:20px;color:var(--acc);font-weight:700}
   .why{color:var(--mut);margin:6px 0 2px;font-size:14px}
+  .refuse{width:100%;background:var(--card2);border-radius:14px;padding:11px;font-size:14.5px;margin:0 0 12px;color:var(--tx)}
   .tip{margin:8px 0 12px;font-size:15px}
   .bars div{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mut);margin:4px 0}
   .bars i{flex:1;height:6px;border-radius:3px;background:var(--card2);position:relative;overflow:hidden}
@@ -423,6 +424,7 @@ function getCtx() {
     awake: sw ? (sw.type === 'wake' ? mins(sw.t) : 0) : null,
     sinceDiaper: dp ? mins(dp.t) : null,
     sinceBelly: (() => { const b = last('belly'); return b ? mins(b.t) : null; })(),
+    sinceRefuse: (() => { const b = last('refuse'); return b ? mins(b.t) : null; })(),
     sincePush: (() => { const b = last('push'); return b ? mins(b.t) : null; })(),
     sincePoop: (() => { const pp = D.events.filter(e => e.type === 'diaper' && e.poop).sort((a, b) => b.t - a.t)[0]; return pp ? mins(pp.t) : null; })(),
     hour: d.getHours() + d.getMinutes() / 60,
@@ -446,7 +448,7 @@ const sig = (x, mid, w) => 1 / (1 + Math.exp(-(x - mid) / w));
 function normP(s) { const t = KEYS.reduce((a, k) => a + s[k], 0) || 1, o = {}; KEYS.forEach(k => o[k] = s[k] / t); return o; }
 function prior(c) {
   return normP({
-    hambre: c.sinceFeed == null ? 0.35 : 0.05 + 0.9 * sig(c.sinceFeed, c.feedInt * 0.85, 15),
+    hambre: (c.sinceFeed == null ? 0.35 : 0.05 + 0.9 * sig(c.sinceFeed, c.feedInt * 0.85, 15)) * (c.sinceRefuse != null && c.sinceRefuse <= 30 ? 0.35 : 1),
     sueno:  c.awake == null ? 0.3 : 0.05 + 0.85 * sig(c.awake, c.wakeWin * 0.9, 12),
     panal:  c.sinceDiaper == null ? 0.3 : 0.05 + 0.7 * sig(c.sinceDiaper, diaperInt(), diaperInt() / 6),
     ...tempPrior(c),
@@ -832,7 +834,9 @@ function renderResult(cry) {
   $('result').innerHTML = `
     <div class="top">${L.e}<b>${L.t}</b><span class="pct">${Math.round(P[top] * 100)}%</span></div>
     <p class="why">${why(top, cry.ctx)}</p>
+    ${cry.refused ? `<p class="why">🙅 Rechazó el seno, así que descarté el hambre por ahora.</p>` : ''}
     <p class="tip">${L.tip}</p>
+    ${top === 'hambre' && !cry.refused ? `<button class="refuse" id="refuseBtn">🙅 Rechazó el seno</button>` : ''}
     <div class="bars">${ord.slice(1).map(k => `<div><span>${LABELS[k].e} ${LABELS[k].s}</span><i style="--w:${Math.round(P[k] * 100)}%"></i>${Math.round(P[k] * 100)}%</div>`).join('')}</div>
     <p class="learn">Aprendiendo de ${nLab} llanto${nLab === 1 ? '' : 's'} · lo aprendido pesa ${Math.round(cry.pred.w * 100)}%${audioNote}</p>
     <h3>¿Qué la calmó? (un toque)</h3>
@@ -841,7 +845,20 @@ function renderResult(cry) {
   $('result').hidden = false;
   $('result').querySelectorAll('[data-l]').forEach(b => b.onclick = () => labelCry(cry.id, b.dataset.l, true));
   $('laterBtn').onclick = () => { $('result').hidden = true; render(); };
+  if ($('refuseBtn')) $('refuseBtn').onclick = () => refuseBreast(cry);
   $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+/* Le ofrecieron el seno y no lo quiso: no era hambre. Baja el hambre, muestra la siguiente opción
+   y deja el registro (por 30 min la app también le baja el hambre a los llantos siguientes). */
+function refuseBreast(cry) {
+  const ev = addEvent('refuse');
+  const prevP = { ...cry.pred.p };
+  const P = { ...cry.pred.p }; P.hambre = Math.min(P.hambre, 0.02);
+  cry.pred.p = normP(P); cry.refused = true; persist('cries', cry);
+  renderResult(cry); render();
+  toast('🙅 Anotado: rechazó el seno', [{ t: 'Deshacer', fn: () => {
+    removeEvent(ev.id); cry.pred.p = prevP; cry.refused = false; persist('cries', cry); renderResult(cry); render();
+  } }]);
 }
 function renderPending() {
   const shown = $('result').hidden ? null : currentCryId;
@@ -997,6 +1014,7 @@ function buildDay(off) {
   const cries = D.cries.filter(inDay).sort((a, b) => a.t - b.t);
   const bellies = D.events.filter(e => e.type === 'belly' && inDay(e)).sort((a, b) => a.t - b.t);
   const pushes = D.events.filter(e => e.type === 'push' && inDay(e)).sort((a, b) => a.t - b.t);
+  const refuses = D.events.filter(e => e.type === 'refuse' && inDay(e)).sort((a, b) => a.t - b.t);
   const sleeps = sleepIntervals(d0, d1), awakes = awakeIntervals(d0, d1, sleeps);
   const breastMin = feeds.filter(f => f.mode === 'breast').reduce((a, f) => a + (f.mins || Math.round(activeMs(f) / 60000)), 0);
   const oz = feeds.filter(f => f.mode === 'bottle').reduce((a, f) => a + (+f.oz || 0), 0);
@@ -1013,6 +1031,7 @@ function buildDay(off) {
   });
   diapers.forEach(e => items.push({ k: 'dp', id: e.id, poop: !!e.poop, a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: `🧷 Cambio de pañal${e.poop ? ' · 💩 popó' : ''}`, by: who(e) }));
   bellies.forEach(e => items.push({ k: 'bl', a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: '🎈 Panza durita', by: who(e) }));
+  refuses.forEach(e => items.push({ k: 'rf', a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: '🙅 Rechazó el seno', by: who(e) }));
   pushes.forEach(e => items.push({ k: 'pu', a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: '😤 Pujó', by: who(e) }));
   cries.forEach(c => items.push({ k: 'cr', a: c.t, b: c.t, t: c.t, h: hhmm(c.t), x: `😢 Lloró${c.label ? ` → la calmó: ${Lb(c.label).e} ${Lb(c.label).t}` : ` · sugerí ${Lb(topOf(c.pred.p)).e} (sin marcar)`}`, by: who(c) }));
   sleeps.forEach(s => items.push({ k: 'sl', a: s.ca, b: s.cb, t: s.ca, h: `${s.a < d0 ? 'ayer ' + hhmm(s.a) : hhmm(s.ca)}–${s.on && s.cb >= now() - 1000 ? 'ahora' : hhmm(s.cb)}`, x: tramoOf(s.a) ? `🌙 Noche · tramo ${tramoOf(s.a).i} · ${dur(s.cb - s.ca)}${cycleCount(s.cb - s.ca, new Date(s.a)) ? ` · ${cycleCount(s.cb - s.ca, new Date(s.a))}` : ''}${s.on ? ' · sigue dormida' : ''}` : `😴 Durmió ${dur(s.cb - s.ca)}${cycleCount(s.cb - s.ca, new Date(s.a)) ? ` · ${cycleCount(s.cb - s.ca, new Date(s.a))}` : ''}${s.on ? ' · sigue dormida' : ''}`, by: who(s) }));
@@ -1125,8 +1144,8 @@ function openDay(off = 0) {
   const pos = t => ((t - R.d0) / span * 100).toFixed(2) + '%';
   const wid = (a, b) => Math.max(0.4, (b - a) / span * 100).toFixed(2) + '%';
   const nowIn = now() >= R.d0 && now() < R.d1;
-  const LANES = { sueno: ['aw', 'sl'], tomas: ['fb', 'fo'], marcas: ['dp', 'cr', 'bl', 'pu'] };
-  const MK = { dp: '🧷', cr: '😢', bl: '🎈', pu: '😤' };
+  const LANES = { sueno: ['aw', 'sl'], tomas: ['fb', 'fo'], marcas: ['dp', 'cr', 'bl', 'pu', 'rf'] };
+  const MK = { dp: '🧷', cr: '😢', bl: '🎈', pu: '😤', rf: '🙅' };
   const laneEls = ks => R.items.map((it, i) => !ks.includes(it.k) ? ''
     : MK[it.k] ? `<em class="mk" data-i="${i}" style="left:${pos(it.a)}">${MK[it.k]}</em>`
     : `<i class="${it.k}" data-i="${i}" style="left:${pos(it.a)};width:${it.k === 'fo' ? '0.8%' : wid(it.a, it.b)}"></i>`).join('');
@@ -1153,7 +1172,7 @@ function openDay(off = 0) {
       <p class="lanelbl">Tomas</p>
       <div class="lane" data-lane="tomas">${laneEls(['fb', 'fo'])}</div>
       <p class="lanelbl">Pañal, llanto y panza</p>
-      <div class="lane" data-lane="marcas">${laneEls(['dp', 'cr', 'bl', 'pu'])}</div>
+      <div class="lane" data-lane="marcas">${laneEls(['dp', 'cr', 'bl', 'pu', 'rf'])}</div>
       <div class="hours"><span>12am</span><span>3</span><span>6am</span><span>9</span><span>12pm</span><span>3</span><span>6pm</span><span>9</span><span>12am</span></div>
     </div>
     <div class="dtip" id="dTip"><span class="why">👆 Toca una barra o un ícono para ver la hora y los detalles.</span></div>
