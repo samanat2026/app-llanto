@@ -161,6 +161,10 @@
   .list .it{display:flex;gap:10px;padding:10px 0;border-top:1px solid #ffffff10;font-size:14px}
   .list .it .h{width:104px;color:var(--mut);font-variant-numeric:tabular-nums;flex-shrink:0;font-size:13px}
   .list .it .by{display:block;color:var(--mut);font-size:12px}
+  .dpa{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .dpa button{padding:6px 10px;font-size:13px;border-radius:10px;min-height:0;background:var(--card2);color:var(--tx);border:1px solid #ffffff22}
+  .dpa button.on{background:var(--acc);color:#1a1a1a}
+  .dpa button.del.armed{background:#e5484d;color:#fff}
   #tour{position:fixed;inset:0;z-index:20}
   #tour .spot{position:fixed;border-radius:18px;box-shadow:0 0 0 9999px rgba(10,8,16,.8);transition:all .25s ease;pointer-events:none}
   #tour .bubble{position:fixed;left:16px;right:16px;max-width:488px;margin:0 auto;background:#fff;color:#1b1726;border-radius:18px;padding:16px;box-shadow:0 10px 30px #0009}
@@ -941,12 +945,36 @@ function buildDay(off) {
     } else if (f.mode === 'bottle') items.push({ k: 'fo', m: 'bottle', a: f.t, b: f.t, t: f.t, h: hhmm(f.t), x: `🍼 Tetero ${String(f.oz).replace('.', ',')} oz`, by: who(f) });
     else items.push({ k: 'fo', m: 'other', a: f.t, b: f.t, t: f.t, h: hhmm(f.t), x: '🍼 Comió', by: who(f) });
   });
-  diapers.forEach(e => items.push({ k: 'dp', a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: `🧷 Cambio de pañal${e.poop ? ' · 💩 popó' : ''}`, by: who(e) }));
+  diapers.forEach(e => items.push({ k: 'dp', id: e.id, poop: !!e.poop, a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: `🧷 Cambio de pañal${e.poop ? ' · 💩 popó' : ''}`, by: who(e) }));
   cries.forEach(c => items.push({ k: 'cr', a: c.t, b: c.t, t: c.t, h: hhmm(c.t), x: `😢 Lloró${c.label ? ` → la calmó: ${Lb(c.label).e} ${Lb(c.label).t}` : ` · sugerí ${Lb(topOf(c.pred.p)).e} (sin marcar)`}`, by: who(c) }));
   sleeps.forEach(s => items.push({ k: 'sl', a: s.ca, b: s.cb, t: s.ca, h: `${s.a < d0 ? 'ayer ' + hhmm(s.a) : hhmm(s.ca)}–${s.on && s.cb >= now() - 1000 ? 'ahora' : hhmm(s.cb)}`, x: isNight(s.a) ? `🌙 Sueño de la noche ${dur(s.cb - s.ca)}${s.on ? ' · sigue dormida' : ''}` : `😴 Durmió ${dur(s.cb - s.ca)}${cycleCount(s.cb - s.ca, new Date(s.a)) ? ` · ${cycleCount(s.cb - s.ca, new Date(s.a))}` : ''}${s.on ? ' · sigue dormida' : ''}`, by: who(s) }));
   awakes.forEach(s => items.push({ k: 'aw', a: s.ca, b: s.cb, t: s.ca, h: `${hhmm(s.ca)}–${s.on ? 'ahora' : hhmm(s.cb)}`, x: `☀️ Despierta ${dur(s.cb - s.ca)}`, by: '' }));
   items.sort((a, b) => b.t - a.t);            // del más reciente al más temprano
   return { d0, d1, feeds, diapers, cries, sleeps, awakes, breastMin, oz, sleepMs, awakeMs, items };
+}
+/* Corregir un pañal ya registrado: marcar/quitar popó o eliminarlo */
+const dpActs = it => it.k !== 'dp' ? '' : `<span class="dpa">
+  <button data-dpoop="${it.id}" class="${it.poop ? 'on' : ''}">${it.poop ? '💩 Con popó ✓' : '💩 Hubo popó'}</button>
+  <button data-ddel="${it.id}" class="del">🗑 Eliminar</button></span>`;
+function wireDp(root, refresh) {
+  root.querySelectorAll('[data-dpoop]').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    const x = D.events.find(e => e.id === b.dataset.dpoop); if (!x) return;
+    x.poop = !x.poop; persist('events', x); render(); refresh();
+    toast(x.poop ? '💩 Marcado: pañal con popó' : 'Popó quitada de ese pañal');
+  });
+  root.querySelectorAll('[data-ddel]').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    if (!b.classList.contains('armed')) {           // primer toque: pide confirmar
+      b.classList.add('armed'); b.textContent = '¿Seguro? Toca otra vez';
+      setTimeout(() => { if (b.isConnected) { b.classList.remove('armed'); b.textContent = '🗑 Eliminar'; } }, 4000);
+      return;
+    }
+    const x = D.events.find(e => e.id === b.dataset.ddel); if (!x) return;
+    const snap = { ...x };
+    removeEvent(x.id); render(); refresh();
+    toast('🧷 Pañal eliminado', [{ t: 'Deshacer', fn: () => { restoreEvent(snap); render(); refresh(); } }]);
+  });
 }
 /* Resumen de una sola categoría del día (al tocar un recuadro) */
 function openSum(R, kind, off) {
@@ -999,12 +1027,13 @@ function openSum(R, kind, off) {
   sh.innerHTML = `<div class="sheet">
     <h3 style="margin-top:0">${title} · ${dayTitle(off, R.d0)}</h3>
     <div class="sstats">${stats}</div>
-    <div class="list">${sel.length ? sel.map(i => `<div class="it"><span class="h">${i.h}</span><span>${i.x}${i.by ? `<span class="by">${esc(i.by)}</span>` : ''}</span></div>`).join('')
+    <div class="list">${sel.length ? sel.map(i => `<div class="it"><span class="h">${i.h}</span><span>${i.x}${i.by ? `<span class="by">${esc(i.by)}</span>` : ''}${dpActs(i)}</span></div>`).join('')
       : '<p class="why">No hay registros de esto en el día.</p>'}</div>
     ${kind === 'dormida' ? nightsHTML() : ''}
     <button class="later" id="sumClose">Cerrar</button></div>`;
   sh.onclick = e => { if (e.target === sh) close(); };
   $('sumClose').onclick = close;
+  wireDp(sh, () => { openDay(off); openSum(buildDay(off), kind, off); });
   sh.hidden = false;
 }
 function dayTitle(off, d0) {
@@ -1064,7 +1093,7 @@ function openDay(off = 0) {
       <span style="--c:var(--acc)">Pecho</span><span style="--c:#ffb3cf">Tetero</span>
     </div>
     <h3>Hora por hora</h3>
-    <div class="list">${R.items.length ? R.items.map(i => `<div class="it"><span class="h">${i.h}</span><span>${i.x}${i.by ? `<span class="by">${esc(i.by)}</span>` : ''}</span></div>`).join('')
+    <div class="list">${R.items.length ? R.items.map(i => `<div class="it"><span class="h">${i.h}</span><span>${i.x}${i.by ? `<span class="by">${esc(i.by)}</span>` : ''}${dpActs(i)}</span></div>`).join('')
       : '<p class="why">No hay registros este día.</p>'}</div>
     <div class="row" style="margin-top:16px">
       <button id="dShare">📤 Compartir resumen</button>
@@ -1088,8 +1117,10 @@ function openDay(off = 0) {
     if (best < 0 || bd > tol) { tip.innerHTML = '<span class="why">No hay registros a esa hora.</span>'; return; }
     const it = R.items[best];
     sec.querySelector(`.lane [data-i="${best}"]`).classList.add('sel');
-    tip.innerHTML = `<b>${it.x}</b><span>🕐 ${it.h}${it.by ? ` · ${esc(it.by)}` : ''}</span>`;
+    tip.innerHTML = `<b>${it.x}</b><span>🕐 ${it.h}${it.by ? ` · ${esc(it.by)}` : ''}</span>${dpActs(it)}`;
+    wireDp(tip, () => openDay(dayOff));
   });
+  wireDp(sec.querySelector('.list'), () => openDay(dayOff));
   sec.querySelectorAll('[data-sum]').forEach(b => b.onclick = () => openSum(R, b.dataset.sum, dayOff));
   $('dPrev').onclick = () => openDay(dayOff - 1);
   $('dNext').onclick = () => openDay(dayOff + 1);
@@ -1435,7 +1466,7 @@ const TOUR = [
   { el: '#cryBtn', t: '<b>Cuando llore,</b> toca aquí y acerca el celular a ella unos segundos. Te digo la causa más probable: hambre, sueño, pañal, frío, calor, cólico/gases u otra.' },
   { el: '[data-ev=feed]', t: '<b>Cuando coma,</b> toca aquí. Eliges <b>pecho</b> (con cronómetro y lado) o <b>tetero</b> (tocas las onzas).' },
   { el: '#sleepBtn', t: '<b>Cuando se duerma</b> toca aquí, y <b>cuando se despierte</b> vuelves a tocar el mismo botón.' },
-  { el: '[data-ev=diaper]', t: '<b>Cada cambio de pañal,</b> un toque aquí. Si hubo popó, toca <b>💩 Hubo popó</b> en el aviso de abajo: ayuda a detectar cólicos y estreñimiento.' },
+  { el: '[data-ev=diaper]', t: '<b>Cada cambio de pañal,</b> un toque aquí. Si hubo popó, toca <b>💩 Hubo popó</b> en el aviso de abajo: ayuda a detectar cólicos y estreñimiento. Si se te olvidó, la corriges luego en 📊 Resumen del día.' },
   { el: '#dayBtn', t: '<b>Resumen y cronograma del día:</b> cuántas tomas, cuánto durmió y los pañales. En el cronograma <b>toca cualquier barra o ícono</b> para ver a qué hora fue y cuánto duró. Abajo está todo hora por hora, del más reciente al más temprano, y lo puedes compartir con el pediatra.' },
   { el: '#menuBtn', t: '<b>Menú:</b> invitar a la familia por WhatsApp, lo que la app va aprendiendo, respaldo y ver este tutorial otra vez.' },
   { t: '⭐ <b>Lo más importante:</b> después de que llore, cuando logres calmarla, marca <b>qué funcionó</b>. Con cada respuesta la app aprende a reconocer sus llantos.<br><br>¿Te equivocaste en algo? Siempre aparece <b>Deshacer</b> abajo.' }

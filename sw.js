@@ -1,4 +1,4 @@
-const CACHE = 'llanto-v22';
+const CACHE = 'llanto-v23';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon.svg', './firebase-config.js'];
 
 self.addEventListener('install', e => {
