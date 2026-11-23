@@ -77,6 +77,9 @@
   .who b{display:block;font-size:16px}
   .who small{color:var(--mut);font-size:13px}
   .who .on-t{color:var(--ok)}
+  .age{display:block;width:100%;text-align:left;background:none;color:var(--mut);font-size:14px;padding:0 0 2px}
+  .age b{color:var(--acc);font-weight:600}
+  input[type=date]{width:100%;font:inherit;font-size:17px;padding:14px;border-radius:14px;border:1px solid #ffffff22;background:var(--card2);color:var(--tx);margin:6px 0 10px;color-scheme:dark}
   code.fam{font-size:18px;letter-spacing:1px;color:var(--ok)}
   #toast{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 14px);max-width:496px;margin:0 auto;background:#3a3550;border-radius:16px;
          padding:12px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;box-shadow:0 8px 24px #0008;font-size:15px;z-index:9}
@@ -169,6 +172,7 @@
       <span class="sync"><span class="wx" id="wx"></span> <span id="sync"></span></span>
       <button class="icon-btn" id="menuBtn" aria-label="Menú">⋯</button>
     </header>
+    <button class="age" id="ageBtn" hidden></button>
 
     <div id="feedBanner"></div>
     <section class="status" id="status"></section>
@@ -289,6 +293,11 @@ async function initCloud(code) {
     snap => { cloud.owner = snap.exists() ? snap.data().owner : null; },
     err => { console.error(err); if (tries < 5) setTimeout(() => watchFam(tries + 1), 4000); });
   watchFam();
+  // Nombre y fecha de nacimiento de la bebé (documento fijo, t:0 para que no entre en la lista de eventos)
+  const watchBaby = (tries = 0) => F.onSnapshot(F.doc(col('events'), 'baby'),
+    snap => { if (snap.exists()) { BABY = snap.data(); lsSet('llanto.baby', JSON.stringify(BABY)); } renderAge(); },
+    err => { console.error(err); if (tries < 5) setTimeout(() => watchBaby(tries + 1), 4000); });
+  watchBaby();
   cloud.claim = () => F.setDoc(famDoc, { owner: MY, t: now() });
   cloud.watchMembers = (cb, onErr) => F.onSnapshot(F.collection(db, 'families', code, 'members'),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onErr);
@@ -568,7 +577,7 @@ function render() {
   sb.classList.toggle('on', sl);
   renderBanner();
   renderPending();
-  renderWxAsk(); showWx();
+  renderWxAsk(); showWx(); renderAge();
 }
 
 /* ====== Tomas: pecho (cronómetro y lado) o tetero (onzas) ====== */
@@ -1035,6 +1044,60 @@ $('menuBtn').onclick = () => {
     render(); m.hidden = true; $('result').hidden = true; toast('Datos borrados');
   };
 };
+
+/* ====== Edad de la bebé ====== */
+let BABY = (() => { try { return JSON.parse(lsGet('llanto.baby')) || null; } catch (e) { return null; } })();
+const canEditBaby = () => !cloud || cloud.owner === undefined || cloud.owner === null || cloud.owner === cloud.uid;
+function ageParts(birth, today = new Date()) {
+  const [y, mo, d] = birth.split('-').map(Number);
+  const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  let m = (t.getFullYear() - y) * 12 + (t.getMonth() - (mo - 1));
+  const at = k => { const last = new Date(y, mo - 1 + k + 1, 0).getDate(); return new Date(y, mo - 1 + k, Math.min(d, last)); };
+  if (at(m) > t) m--;
+  if (m < 0) return null;
+  const days = Math.round((t - at(m)) / 864e5);
+  return { m, w: Math.floor(days / 7), d: days % 7 };
+}
+function ageTxt(birth) {
+  const a = ageParts(birth);
+  if (!a) return null;
+  const pl = (n, s, p) => `${n} ${n === 1 ? s : p}`;
+  const parts = [a.m && pl(a.m, 'mes', 'meses'), a.w && pl(a.w, 'semana', 'semanas'), a.d && pl(a.d, 'día', 'días')].filter(Boolean);
+  if (!parts.length) return '¡nació hoy! 🎉';
+  return parts.length === 1 ? parts[0] : parts.slice(0, -1).join(', ') + ' y ' + parts[parts.length - 1];
+}
+function renderAge() {
+  const b = $('ageBtn');
+  if (BABY && BABY.birth) {
+    const txt = ageTxt(BABY.birth);
+    b.innerHTML = `👶 ${BABY.name ? `<b>${esc(BABY.name)}</b> · ` : ''}${txt || 'aún no ha nacido'}`;
+    b.hidden = false;
+  } else { b.innerHTML = '👶 Toca para poner la fecha de nacimiento'; b.hidden = !canEditBaby(); }
+}
+function openBaby() {
+  if (!canEditBaby()) return;
+  const sh = $('sheet');
+  const close = () => { sh.hidden = true; sh.innerHTML = ''; };
+  const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  sh.innerHTML = `<div class="sheet">
+    <h3 style="margin-top:0">👶 La bebé</h3>
+    <input type="text" id="bName" placeholder="Nombre" maxlength="20" value="${esc(BABY && BABY.name)}">
+    <input type="date" id="bBirth" max="${today}" value="${esc(BABY && BABY.birth)}">
+    <button class="big" id="bSave">Guardar</button>
+    <button class="later" id="bClose">Cancelar</button></div>`;
+  sh.onclick = e => { if (e.target === sh) close(); };
+  sh.hidden = false;
+  $('bClose').onclick = close;
+  $('bSave').onclick = () => {
+    const birth = $('bBirth').value, name = $('bName').value.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(birth)) { toast('Elige la fecha de nacimiento'); return; }
+    BABY = { id: 'baby', type: 'baby', t: 0, name, birth };
+    lsSet('llanto.baby', JSON.stringify(BABY));
+    if (cloud) cloud.set('events', BABY);
+    close(); renderAge(); toast('Guardado ✓');
+  };
+}
+$('ageBtn').onclick = openBaby;
 
 /* ====== Quién está en línea (solo la administradora) ====== */
 const ONLINE_MS = 2.5 * 60000;
