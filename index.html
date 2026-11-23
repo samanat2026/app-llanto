@@ -915,15 +915,32 @@ function dayBounds(off) {
   return [a.getTime(), b.getTime()];
 }
 const dur = ms => { const m = Math.round(ms / 60000); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`; };
-function sleepIntervals(d0, d1) {
+/* Sueños registrados. Si hay una toma en medio de un sueño (se le dio de comer sin registrar que se despertó),
+   esa toma cuenta como despertar: el sueño se parte en dos y el segundo empieza cuando termina la toma. */
+function sleepSpans() {
   const ev = D.events.filter(e => e.type === 'sleep' || e.type === 'wake').sort((a, b) => a.t - b.t);
-  const out = []; let s = null;
+  const raw = []; let s = null;
   for (const e of ev) {
     if (e.type === 'sleep') { if (s == null) s = e; }
-    else if (s != null) { out.push({ a: s.t, b: e.t, by: s.by }); s = null; }
+    else if (s != null) { raw.push({ a: s.t, b: e.t, by: s.by }); s = null; }
   }
-  if (s != null) out.push({ a: s.t, b: now(), by: s.by, on: true });
-  return out.filter(x => x.b > d0 && x.a < d1).map(x => ({ ...x, ca: Math.max(x.a, d0), cb: Math.min(x.b, d1) }));
+  if (s != null) raw.push({ a: s.t, b: now(), by: s.by, on: true });
+  const feeds = D.events.filter(e => e.type === 'feed').map(e => ({ a: e.t, b: Math.max(e.t, e.end || e.t) })).sort((x, y) => x.a - y.a);
+  const out = [];
+  for (const x of raw) {
+    let cur = { ...x };
+    for (const f of feeds) {
+      if (f.a <= cur.a + 60000 || f.a >= cur.b - 60000) continue;
+      out.push({ a: cur.a, b: f.a, by: cur.by });
+      cur = { ...cur, a: Math.max(f.b, f.a + 60000) };
+      if (cur.a >= cur.b) { cur = null; break; }
+    }
+    if (cur) out.push(cur);
+  }
+  return out;
+}
+function sleepIntervals(d0, d1) {
+  return sleepSpans().filter(x => x.b > d0 && x.a < d1).map(x => ({ ...x, ca: Math.max(x.a, d0), cb: Math.min(x.b, d1) }));
 }
 function awakeIntervals(d0, d1, sleeps) {
   const sw = D.events.filter(e => e.type === 'sleep' || e.type === 'wake');
@@ -1307,16 +1324,7 @@ function cycleCount(ms, at) {
    Si se duerme entre las 5 pm y las 10:30 pm y duerme al menos 1 h 30 seguida, se toma como el inicio de su noche (tramo 1).
    Los sueños que empiezan después y antes de las 6 am son los tramos 2, 3… de esa misma noche. */
 const NIGHT_FROM = 17, NIGHT_TO = 22.5, NIGHT_MIN = 90;
-function allSleeps() {
-  const ev = D.events.filter(e => e.type === 'sleep' || e.type === 'wake').sort((a, b) => a.t - b.t);
-  const out = []; let st = null;
-  for (const e of ev) {
-    if (e.type === 'sleep') { if (st == null) st = e; }
-    else if (st != null) { out.push({ a: st.t, b: e.t }); st = null; }
-  }
-  if (st != null) out.push({ a: st.t, b: now(), on: true });
-  return out;
-}
+function allSleeps() { return sleepSpans(); }
 const hourOf = t => { const d = new Date(t); return d.getHours() + d.getMinutes() / 60; };
 function nights() {
   const seen = new Set(), out = [];
@@ -1443,8 +1451,10 @@ function cycleNote(len) {
   return `<small>A ${age ? `su edad (${age.m} ${age.m === 1 ? 'mes' : 'meses'})` : 'esta edad'} cada ciclo dura unos <b>${len} min</b>. Al terminar uno, se vuelve a dormir o se despierta. Es un promedio: cada bebé es distinto.${age ? '' : ' Pon la fecha de nacimiento arriba para ajustarlo.'}</small>`;
 }
 function renderSleepCard() {
-  const el = $('sleepCard'), ls = last(['sleep', 'wake']);
+  const el = $('sleepCard'); let ls = last(['sleep', 'wake']);
   if (!ls || ls.type !== 'sleep') { el.innerHTML = ''; return; }
+  const curSp = sleepSpans().filter(x => x.on).pop();          // si comió en medio, el sueño actual empieza después de la toma
+  if (curSp && curSp.a !== ls.t) ls = { ...ls, t: curSp.a };
   const h = hourOf(ls.t);
   if (h >= NIGHT_FROM && h < NIGHT_TO && isNight(ls.t)) { renderNightCard(el, ls); return; }
   const tr = tramoOf(ls.t);
