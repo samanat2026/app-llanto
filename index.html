@@ -1118,6 +1118,7 @@ $('menuBtn').onclick = () => {
     <p class="note">El audio nunca se sube: solo se guardan números que describen el llanto.</p>
     <p class="note">Es una ayuda, no un diagnóstico. Llanto muy agudo, que no se calma con nada, fiebre, rechazo a comer o decaimiento: llama al pediatra.</p>`;
   m.hidden = false; wipeArmed = false;
+  requestAnimationFrame(() => m.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   if ($('leaveBtn')) $('leaveBtn').onclick = () => { lsSet('llanto.fam', null); location.href = location.pathname; };
   if ($('whoBtn')) $('whoBtn').onclick = () => { m.hidden = true; openWho(); };
   if ($('claimBtn')) $('claimBtn').onclick = async () => {
