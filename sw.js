@@ -1,5 +1,5 @@
-const CACHE = 'llanto-v28';
-const FILES = ['./', './index.html', './manifest.webmanifest', './icon.svg', './firebase-config.js'];
+const CACHE = 'llanto-v29';
+const FILES = ['./', './index.html', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png', './badge-96.png', './firebase-config.js'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
@@ -31,7 +31,7 @@ self.addEventListener('push', e => {
   const d = p.data || p.notification || p;
   e.waitUntil(self.registration.showNotification(d.title || '¿Qué tiene?', {
     body: d.body || '', tag: d.tag || 'aviso', renotify: true,
-    icon: 'icon.svg', badge: 'icon.svg', data: { url: './' }
+    icon: 'icon-192.png', badge: 'badge-96.png', data: { url: './' }
   }));
 });
 self.addEventListener('notificationclick', e => {
