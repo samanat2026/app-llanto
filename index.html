@@ -1093,7 +1093,7 @@ function openDay(off = 0) {
       <span style="--c:var(--acc)">Pecho</span><span style="--c:#ffb3cf">Tetero</span>
     </div>
     <h3>Hora por hora</h3>
-    <div class="list">${R.items.length ? R.items.map(i => `<div class="it"><span class="h">${i.h}</span><span>${i.x}${i.by ? `<span class="by">${esc(i.by)}</span>` : ''}${dpActs(i)}</span></div>`).join('')
+    <div class="list">${R.items.length ? R.items.map(i => `<div class="it"><span class="h">${i.h}</span><span>${i.x}${i.by ? `<span class="by">${esc(i.by)}</span>` : ''}</span></div>`).join('')
       : '<p class="why">No hay registros este día.</p>'}</div>
     <div class="row" style="margin-top:16px">
       <button id="dShare">📤 Compartir resumen</button>
@@ -1117,10 +1117,8 @@ function openDay(off = 0) {
     if (best < 0 || bd > tol) { tip.innerHTML = '<span class="why">No hay registros a esa hora.</span>'; return; }
     const it = R.items[best];
     sec.querySelector(`.lane [data-i="${best}"]`).classList.add('sel');
-    tip.innerHTML = `<b>${it.x}</b><span>🕐 ${it.h}${it.by ? ` · ${esc(it.by)}` : ''}</span>${dpActs(it)}`;
-    wireDp(tip, () => openDay(dayOff));
+    tip.innerHTML = `<b>${it.x}</b><span>🕐 ${it.h}${it.by ? ` · ${esc(it.by)}` : ''}</span>`;
   });
-  wireDp(sec.querySelector('.list'), () => openDay(dayOff));
   sec.querySelectorAll('[data-sum]').forEach(b => b.onclick = () => openSum(R, b.dataset.sum, dayOff));
   $('dPrev').onclick = () => openDay(dayOff - 1);
   $('dNext').onclick = () => openDay(dayOff + 1);
@@ -1466,7 +1464,7 @@ const TOUR = [
   { el: '#cryBtn', t: '<b>Cuando llore,</b> toca aquí y acerca el celular a ella unos segundos. Te digo la causa más probable: hambre, sueño, pañal, frío, calor, cólico/gases u otra.' },
   { el: '[data-ev=feed]', t: '<b>Cuando coma,</b> toca aquí. Eliges <b>pecho</b> (con cronómetro y lado) o <b>tetero</b> (tocas las onzas).' },
   { el: '#sleepBtn', t: '<b>Cuando se duerma</b> toca aquí, y <b>cuando se despierte</b> vuelves a tocar el mismo botón.' },
-  { el: '[data-ev=diaper]', t: '<b>Cada cambio de pañal,</b> un toque aquí. Si hubo popó, toca <b>💩 Hubo popó</b> en el aviso de abajo: ayuda a detectar cólicos y estreñimiento. Si se te olvidó, la corriges luego en 📊 Resumen del día.' },
+  { el: '[data-ev=diaper]', t: '<b>Cada cambio de pañal,</b> un toque aquí. Si hubo popó, toca <b>💩 Hubo popó</b> en el aviso de abajo: ayuda a detectar cólicos y estreñimiento. Si se te olvidó, la corriges luego en 📊 Resumen del día → recuadro 🧷 pañales.' },
   { el: '#dayBtn', t: '<b>Resumen y cronograma del día:</b> cuántas tomas, cuánto durmió y los pañales. En el cronograma <b>toca cualquier barra o ícono</b> para ver a qué hora fue y cuánto duró. Abajo está todo hora por hora, del más reciente al más temprano, y lo puedes compartir con el pediatra.' },
   { el: '#menuBtn', t: '<b>Menú:</b> invitar a la familia por WhatsApp, lo que la app va aprendiendo, respaldo y ver este tutorial otra vez.' },
   { t: '⭐ <b>Lo más importante:</b> después de que llore, cuando logres calmarla, marca <b>qué funcionó</b>. Con cada respuesta la app aprende a reconocer sus llantos.<br><br>¿Te equivocaste en algo? Siempre aparece <b>Deshacer</b> abajo.' }
