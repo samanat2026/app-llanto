@@ -83,7 +83,7 @@
   .scard{background:linear-gradient(160deg,#2b2750,#1f1c2b);border:1px solid #7b6cf655;border-radius:18px;padding:14px;margin:-6px 0 16px}
   .scard .top{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
   .scard .top b{font-size:17px}
-  .scard .top span{font-size:12px;color:var(--mut)}
+  .scard .top span{font-size:12px;color:var(--mut);white-space:nowrap}
   .cyc{display:flex;gap:6px;margin:12px 0 8px;flex-wrap:wrap}
   .cyc i{width:30px;height:10px;border-radius:5px;background:#ffffff14;position:relative;overflow:hidden}
   .cyc i.done{background:#7b6cf6}
@@ -93,6 +93,11 @@
   .scard .ph.deep{color:#a99ffa}
   .scard .ph.light{color:var(--warn)}
   .scard small{display:block;color:var(--mut);font-size:12px;margin-top:8px}
+  .scard.night{background:linear-gradient(160deg,#1d2350,#16182c);border-color:#6c8cf655}
+  .nbar{height:10px;border-radius:5px;background:#ffffff14;margin:12px 0 8px;overflow:hidden}
+  .nbar i{display:block;height:100%;background:linear-gradient(90deg,#6c8cf6,#a99ffa);border-radius:5px}
+  .scard .lnk{display:block;background:none;color:#a9b8ff;font-size:13px;padding:8px 0 0;text-decoration:underline}
+  .nlist .it .h{width:118px}
   code.fam{font-size:18px;letter-spacing:1px;color:var(--ok)}
   #toast{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 14px);max-width:496px;margin:0 auto;background:#3a3550;border-radius:16px;
          padding:12px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;box-shadow:0 8px 24px #0008;font-size:15px;z-index:9}
@@ -920,7 +925,7 @@ function buildDay(off) {
   });
   diapers.forEach(e => items.push({ k: 'dp', a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: `🧷 Cambio de pañal${e.poop ? ' · 💩 popó' : ''}`, by: who(e) }));
   cries.forEach(c => items.push({ k: 'cr', a: c.t, b: c.t, t: c.t, h: hhmm(c.t), x: `😢 Lloró${c.label ? ` → la calmó: ${Lb(c.label).e} ${Lb(c.label).t}` : ` · sugerí ${Lb(topOf(c.pred.p)).e} (sin marcar)`}`, by: who(c) }));
-  sleeps.forEach(s => items.push({ k: 'sl', a: s.ca, b: s.cb, t: s.ca, h: `${s.a < d0 ? 'ayer ' + hhmm(s.a) : hhmm(s.ca)}–${s.on && s.cb >= now() - 1000 ? 'ahora' : hhmm(s.cb)}`, x: `😴 Durmió ${dur(s.cb - s.ca)}${cycleCount(s.cb - s.ca, new Date(s.a)) ? ` · ${cycleCount(s.cb - s.ca, new Date(s.a))}` : ''}${s.on ? ' · sigue dormida' : ''}`, by: who(s) }));
+  sleeps.forEach(s => items.push({ k: 'sl', a: s.ca, b: s.cb, t: s.ca, h: `${s.a < d0 ? 'ayer ' + hhmm(s.a) : hhmm(s.ca)}–${s.on && s.cb >= now() - 1000 ? 'ahora' : hhmm(s.cb)}`, x: isNight(s.a) ? `🌙 Sueño de la noche ${dur(s.cb - s.ca)}${s.on ? ' · sigue dormida' : ''}` : `😴 Durmió ${dur(s.cb - s.ca)}${cycleCount(s.cb - s.ca, new Date(s.a)) ? ` · ${cycleCount(s.cb - s.ca, new Date(s.a))}` : ''}${s.on ? ' · sigue dormida' : ''}`, by: who(s) }));
   awakes.forEach(s => items.push({ k: 'aw', a: s.ca, b: s.cb, t: s.ca, h: `${hhmm(s.ca)}–${s.on ? 'ahora' : hhmm(s.cb)}`, x: `☀️ Despierta ${dur(s.cb - s.ca)}`, by: '' }));
   items.sort((a, b) => b.t - a.t);            // del más reciente al más temprano
   return { d0, d1, feeds, diapers, cries, sleeps, awakes, breastMin, oz, sleepMs, awakeMs, items };
@@ -978,6 +983,7 @@ function openSum(R, kind, off) {
     <div class="sstats">${stats}</div>
     <div class="list">${sel.length ? sel.map(i => `<div class="it"><span class="h">${i.h}</span><span>${i.x}${i.by ? `<span class="by">${esc(i.by)}</span>` : ''}</span></div>`).join('')
       : '<p class="why">No hay registros de esto en el día.</p>'}</div>
+    ${kind === 'dormida' ? nightsHTML() : ''}
     <button class="later" id="sumClose">Cerrar</button></div>`;
   sh.onclick = e => { if (e.target === sh) close(); };
   $('sumClose').onclick = close;
@@ -1221,9 +1227,81 @@ function cycleCount(ms, at) {
   const n = Math.floor(ms / 60000 / cycleMin(at));
   return n < 1 ? '' : `${n} ${n === 1 ? 'ciclo completo' : 'ciclos completos'}`;
 }
+/* ====== Sueño de la noche ======
+   Si se duerme entre las 5 pm y las 10:30 pm y duerme al menos 1 h 30 seguida, se toma como el inicio de su noche. */
+const NIGHT_FROM = 17, NIGHT_TO = 22.5, NIGHT_MIN = 90;
+function allSleeps() {
+  const ev = D.events.filter(e => e.type === 'sleep' || e.type === 'wake').sort((a, b) => a.t - b.t);
+  const out = []; let st = null;
+  for (const e of ev) {
+    if (e.type === 'sleep') { if (st == null) st = e; }
+    else if (st != null) { out.push({ a: st.t, b: e.t }); st = null; }
+  }
+  if (st != null) out.push({ a: st.t, b: now(), on: true });
+  return out;
+}
+const hourOf = t => { const d = new Date(t); return d.getHours() + d.getMinutes() / 60; };
+function nights() {
+  const seen = new Set(), out = [];
+  for (const x of allSleeps()) {
+    const h = hourOf(x.a), day = new Date(x.a).toDateString();
+    if (h < NIGHT_FROM || h >= NIGHT_TO || seen.has(day)) continue;
+    if (!x.on && x.b - x.a < NIGHT_MIN * 60000) continue;
+    seen.add(day); out.push(x);
+  }
+  return out.sort((a, b) => b.a - a.a);
+}
+const isNight = a => nights().some(n => n.a === a);
+function nightStats() {
+  const ns = nights().filter(n => !n.on).slice(0, 7);
+  if (!ns.length) return { n: 0 };
+  const start = ns.reduce((x, n) => x + hourOf(n.a), 0) / ns.length;
+  const stretch = ns.reduce((x, n) => x + (n.b - n.a), 0) / ns.length;
+  const d = new Date(); d.setHours(0, 0, 0, 0);
+  return { n: ns.length, start: d.getTime() + start * 3600e3, stretch };
+}
+function nightsHTML() {
+  const ns = nights().slice(0, 10), S = nightStats();
+  if (!ns.length) return `<h3>🌙 Sus noches</h3><p class="why">Todavía no hay noches registradas. Cuenta como noche cuando se duerme entre las 5 pm y las 10:30 pm y duerme al menos 1 h 30 seguida.</p>`;
+  return `<h3>🌙 Sus noches</h3>
+    ${S.n ? `<div class="sstats">
+      <div><b>${hhmm(S.start)}</b><small>suele empezar su noche</small></div>
+      <div><b>${dur(S.stretch)}</b><small>dura el primer tramo (promedio)</small></div></div>` : ''}
+    <div class="list nlist">${ns.map(n => `<div class="it"><span class="h">${new Date(n.a).toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric' }).replace('.', '')}</span>
+      <span>🌙 Se durmió ${hhmm(n.a)}<span class="by">${n.on ? `Sigue dormida · lleva ${dur(n.b - n.a)}` : `Primer tramo ${dur(n.b - n.a)} · despertó ${hhmm(n.b)}`}</span></span></div>`).join('')}</div>
+    <p class="note">El promedio usa las últimas ${S.n || 0} noches completas. Si vas corriendo la hora de acostarla, aquí ves si funciona.</p>`;
+}
+function openNights() {
+  const sh = $('sheet'), close = () => { sh.hidden = true; sh.innerHTML = ''; };
+  sh.innerHTML = `<div class="sheet">${nightsHTML().replace('<h3>', '<h3 style="margin-top:0">')}<button class="later" id="nClose">Cerrar</button></div>`;
+  sh.onclick = e => { if (e.target === sh) close(); };
+  $('nClose').onclick = close; sh.hidden = false;
+}
+function renderNightCard(el, ls) {
+  const m = mins(ls.t), S = nightStats();
+  const deep = m < 180 && hourOf(now()) >= NIGHT_FROM;
+  const phase = deep ? `<span class="ph deep">💤 Sus horas más profundas · es normal que no se despierte aunque la cambies o la muevas</span>`
+    : `<span class="ph light">🌤️ Sueño más ligero · puede despertarse para comer</span>`;
+  let exp;
+  if (S.n >= 2) {
+    const p = Math.min(100, m * 60000 / S.stretch * 100), wake = ls.t + S.stretch;
+    exp = `<div class="nbar"><i style="width:${p.toFixed(1)}%"></i></div>
+      <p>${m * 60000 < S.stretch ? `Sus últimas ${S.n} noches el primer tramo duró <b>~${dur(S.stretch)}</b>. Si sigue igual, despertaría hacia las <b>${hhmm(wake)}</b>.`
+        : `¡Ya lleva más que su promedio de <b>~${dur(S.stretch)}</b>! 🎉`}</p>`;
+  } else exp = `<p>Estoy aprendiendo sus noches: después de ${2 - S.n} ${2 - S.n === 1 ? 'noche más' : 'noches'} te digo a qué hora suele despertar.</p>`;
+  el.innerHTML = `<div class="scard night">
+    <div class="top"><b>🌙 Sueño de la noche · ${fmt(m)}</b><span>desde ${hhmm(ls.t)}</span></div>
+    ${exp}
+    ${phase}
+    <button class="lnk" id="nightsBtn">Ver sus últimas noches</button>
+  </div>`;
+  $('nightsBtn').onclick = openNights;
+}
 function renderSleepCard() {
   const el = $('sleepCard'), ls = last(['sleep', 'wake']);
   if (!ls || ls.type !== 'sleep') { el.innerHTML = ''; return; }
+  const h = hourOf(ls.t);
+  if (h >= NIGHT_FROM && h < NIGHT_TO) { renderNightCard(el, ls); return; }
   const len = cycleMin(), m = mins(ls.t), done = Math.floor(m / len), into = m - done * len;
   const left = Math.max(1, Math.ceil(len - into)), frac = into / len, curN = done + 1;
   const shown = Math.min(Math.max(curN, 3), 8);
