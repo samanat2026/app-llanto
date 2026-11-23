@@ -123,7 +123,13 @@
   .dnav h2{flex:1;text-align:center;font-size:17px;margin:0}
   .dnav button:disabled{opacity:.3}
   .tot{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
-  .tot div{background:var(--card);border-radius:14px;padding:10px 6px;text-align:center}
+  .tot button{background:var(--card);border-radius:14px;padding:10px 6px;text-align:center;position:relative}
+  .tot button:active{background:var(--card2)}
+  .tot button::after{content:'›';position:absolute;right:8px;top:6px;color:var(--mut);font-size:14px}
+  .sstats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:4px 0 12px}
+  .sstats div{background:var(--card2);border-radius:12px;padding:10px}
+  .sstats b{display:block;font-size:17px}
+  .sstats small{color:var(--mut);font-size:12px}
   .tot b{display:block;font-size:17px}
   .tot small{color:var(--mut);font-size:12px}
   .tl{position:relative;margin:18px 0 4px}
@@ -908,9 +914,9 @@ function buildDay(off) {
     if (f.mode === 'breast') {
       const sides = (f.segs || []).map(s => s.s === 'izq' ? 'izq' : 'der').join(' → ');
       const end = f.end || now();
-      items.push({ k: 'fb', a: f.t, b: end, t: f.t, h: `${hhmm(f.t)}–${f.end ? hhmm(end) : 'ahora'}`, x: `🤱 Pecho ${f.mins || Math.round(activeMs(f) / 60000)} min${sides ? ` (${sides})` : ''}${f.pauses && f.pauses.length ? ' · con pausas' : ''}${f.end ? '' : ' · en curso'}`, by: who(f) });
-    } else if (f.mode === 'bottle') items.push({ k: 'fo', a: f.t, b: f.t, t: f.t, h: hhmm(f.t), x: `🍼 Tetero ${String(f.oz).replace('.', ',')} oz`, by: who(f) });
-    else items.push({ k: 'fo', a: f.t, b: f.t, t: f.t, h: hhmm(f.t), x: '🍼 Comió', by: who(f) });
+      items.push({ k: 'fb', m: 'breast', a: f.t, b: end, t: f.t, h: `${hhmm(f.t)}–${f.end ? hhmm(end) : 'ahora'}`, x: `🤱 Pecho ${f.mins || Math.round(activeMs(f) / 60000)} min${sides ? ` (${sides})` : ''}${f.pauses && f.pauses.length ? ' · con pausas' : ''}${f.end ? '' : ' · en curso'}`, by: who(f) });
+    } else if (f.mode === 'bottle') items.push({ k: 'fo', m: 'bottle', a: f.t, b: f.t, t: f.t, h: hhmm(f.t), x: `🍼 Tetero ${String(f.oz).replace('.', ',')} oz`, by: who(f) });
+    else items.push({ k: 'fo', m: 'other', a: f.t, b: f.t, t: f.t, h: hhmm(f.t), x: '🍼 Comió', by: who(f) });
   });
   diapers.forEach(e => items.push({ k: 'dp', a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: `🧷 Cambio de pañal${e.poop ? ' · 💩 popó' : ''}`, by: who(e) }));
   cries.forEach(c => items.push({ k: 'cr', a: c.t, b: c.t, t: c.t, h: hhmm(c.t), x: `😢 Lloró${c.label ? ` → la calmó: ${Lb(c.label).e} ${Lb(c.label).t}` : ` · sugerí ${Lb(topOf(c.pred.p)).e} (sin marcar)`}`, by: who(c) }));
@@ -918,6 +924,64 @@ function buildDay(off) {
   awakes.forEach(s => items.push({ k: 'aw', a: s.ca, b: s.cb, t: s.ca, h: `${hhmm(s.ca)}–${s.on ? 'ahora' : hhmm(s.cb)}`, x: `☀️ Despierta ${dur(s.cb - s.ca)}`, by: '' }));
   items.sort((a, b) => b.t - a.t);            // del más reciente al más temprano
   return { d0, d1, feeds, diapers, cries, sleeps, awakes, breastMin, oz, sleepMs, awakeMs, items };
+}
+/* Resumen de una sola categoría del día (al tocar un recuadro) */
+function openSum(R, kind, off) {
+  const avgGap = ts => { if (ts.length < 2) return null; const a = [...ts].sort((x, y) => x - y); return (a[a.length - 1] - a[0]) / (a.length - 1) / 60000; };
+  const gapTxt = arr => { const g = avgGap(arr.map(i => i.a)); return g ? '~' + fmt(g) : '—'; };
+  const st = (v, l) => `<div><b>${v}</b><small>${l}</small></div>`;
+  const ms = it => it.b - it.a;
+  const longest = arr => arr.length ? dur(Math.max(...arr.map(ms))) : '—';
+  const avg = arr => arr.length ? dur(arr.reduce((x, it) => x + ms(it), 0) / arr.length) : '—';
+  let title, sel, stats;
+  if (kind === 'tomas') {
+    sel = R.items.filter(i => i.k === 'fb' || i.k === 'fo');
+    title = '🍼 Tomas';
+    stats = st(sel.length, 'tomas') + st(gapTxt(sel), 'entre una y otra')
+      + st(R.breastMin + ' min', '🤱 de pecho') + st(R.oz + ' oz', '🍼 de tetero');
+  } else if (kind === 'pecho') {
+    sel = R.items.filter(i => i.m === 'breast');
+    title = '🤱 Pecho';
+    const sides = { izq: 0, der: 0 };
+    R.feeds.filter(f => f.mode === 'breast').forEach(f => (f.segs || []).forEach(x => sides[x.s === 'izq' ? 'izq' : 'der']++));
+    stats = st(R.breastMin + ' min', 'en total') + st(sel.length, 'tomas de pecho')
+      + st(sel.length ? Math.round(R.breastMin / sel.length) + ' min' : '—', 'promedio por toma')
+      + st(`${sides.izq} · ${sides.der}`, 'veces en lado izq · der');
+  } else if (kind === 'tetero') {
+    sel = R.items.filter(i => i.m === 'bottle');
+    title = '🍼 Tetero';
+    stats = st(R.oz + ' oz', 'en total') + st(sel.length, 'teteros')
+      + st(sel.length ? String(Math.round(R.oz / sel.length * 10) / 10).replace('.', ',') + ' oz' : '—', 'promedio por tetero')
+      + st(gapTxt(sel), 'entre uno y otro');
+  } else if (kind === 'dormida') {
+    sel = R.items.filter(i => i.k === 'sl');
+    title = '😴 Sueño';
+    const cyc = sel.reduce((x, it) => x + Math.floor(ms(it) / 60000 / cycleMin(new Date(it.a))), 0);
+    stats = st(dur(R.sleepMs), 'dormida en total') + st(sel.length, sel.length === 1 ? 'vez que durmió' : 'veces que durmió')
+      + st(longest(sel), 'la más larga') + st(cyc, `ciclos completos (~${cycleMin()} min c/u)`);
+  } else if (kind === 'despierta') {
+    sel = R.items.filter(i => i.k === 'aw');
+    title = '☀️ Despierta';
+    stats = st(dur(R.awakeMs), 'despierta en total') + st(sel.length, 'ratos despierta')
+      + st(longest(sel), 'el más largo') + st(avg(sel), 'promedio');
+  } else {
+    sel = R.items.filter(i => i.k === 'dp');
+    title = '🧷 Pañales';
+    stats = st(sel.length, 'cambios') + st(R.diapers.filter(e => e.poop).length, '💩 con popó')
+      + st(gapTxt(sel), 'entre un cambio y otro')
+      + st(sel.length ? hhmm(Math.max(...sel.map(i => i.a))) : '—', 'último cambio');
+  }
+  const sh = $('sheet');
+  const close = () => { sh.hidden = true; sh.innerHTML = ''; };
+  sh.innerHTML = `<div class="sheet">
+    <h3 style="margin-top:0">${title} · ${dayTitle(off, R.d0)}</h3>
+    <div class="sstats">${stats}</div>
+    <div class="list">${sel.length ? sel.map(i => `<div class="it"><span class="h">${i.h}</span><span>${i.x}${i.by ? `<span class="by">${esc(i.by)}</span>` : ''}</span></div>`).join('')
+      : '<p class="why">No hay registros de esto en el día.</p>'}</div>
+    <button class="later" id="sumClose">Cerrar</button></div>`;
+  sh.onclick = e => { if (e.target === sh) close(); };
+  $('sumClose').onclick = close;
+  sh.hidden = false;
 }
 function dayTitle(off, d0) {
   let s = new Date(d0).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'short' }).replace(/\./g, '').replace(',', '');
@@ -952,12 +1016,12 @@ function openDay(off = 0) {
       <button class="icon-btn" id="dClose" aria-label="Cerrar">✕</button>
     </div>
     <div class="tot">
-      <div><b>${R.feeds.length}</b><small>🍼 tomas</small></div>
-      <div><b>${R.breastMin} min</b><small>🤱 de pecho</small></div>
-      <div><b>${R.oz} oz</b><small>🍼 de tetero</small></div>
-      <div><b>${dur(R.sleepMs)}</b><small>😴 dormida</small></div>
-      <div><b>${dur(R.awakeMs)}</b><small>☀️ despierta</small></div>
-      <div><b>${R.diapers.length}</b><small>🧷 pañales · 💩 ${R.diapers.filter(e => e.poop).length}</small></div>
+      <button data-sum="tomas"><b>${R.feeds.length}</b><small>🍼 tomas</small></button>
+      <button data-sum="pecho"><b>${R.breastMin} min</b><small>🤱 de pecho</small></button>
+      <button data-sum="tetero"><b>${R.oz} oz</b><small>🍼 de tetero</small></button>
+      <button data-sum="dormida"><b>${dur(R.sleepMs)}</b><small>😴 dormida</small></button>
+      <button data-sum="despierta"><b>${dur(R.awakeMs)}</b><small>☀️ despierta</small></button>
+      <button data-sum="panales"><b>${R.diapers.length}</b><small>🧷 pañales · 💩 ${R.diapers.filter(e => e.poop).length}</small></button>
     </div>
     <h3>Cronograma de 24 horas</h3>
     <div class="tl">
@@ -1002,6 +1066,7 @@ function openDay(off = 0) {
     sec.querySelector(`.lane [data-i="${best}"]`).classList.add('sel');
     tip.innerHTML = `<b>${it.x}</b><span>🕐 ${it.h}${it.by ? ` · ${esc(it.by)}` : ''}</span>`;
   });
+  sec.querySelectorAll('[data-sum]').forEach(b => b.onclick = () => openSum(R, b.dataset.sum, dayOff));
   $('dPrev').onclick = () => openDay(dayOff - 1);
   $('dNext').onclick = () => openDay(dayOff + 1);
   $('dClose').onclick = () => { sec.hidden = true; };
