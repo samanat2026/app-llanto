@@ -80,6 +80,19 @@
   .age{display:block;width:100%;text-align:left;background:none;color:var(--mut);font-size:14px;padding:0 0 2px}
   .age b{color:var(--acc);font-weight:600}
   input[type=date]{width:100%;font:inherit;font-size:17px;padding:14px;border-radius:14px;border:1px solid #ffffff22;background:var(--card2);color:var(--tx);margin:6px 0 10px;color-scheme:dark}
+  .scard{background:linear-gradient(160deg,#2b2750,#1f1c2b);border:1px solid #7b6cf655;border-radius:18px;padding:14px;margin:-6px 0 16px}
+  .scard .top{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+  .scard .top b{font-size:17px}
+  .scard .top span{font-size:12px;color:var(--mut)}
+  .cyc{display:flex;gap:6px;margin:12px 0 8px;flex-wrap:wrap}
+  .cyc i{width:30px;height:10px;border-radius:5px;background:#ffffff14;position:relative;overflow:hidden}
+  .cyc i.done{background:#7b6cf6}
+  .cyc i.cur::after{content:'';position:absolute;inset:0;width:var(--p);background:#a99ffa;border-radius:5px}
+  .scard p{margin:4px 0;font-size:14px}
+  .scard .ph{display:inline-block;margin-top:6px;padding:5px 10px;border-radius:10px;font-size:13px;background:#ffffff10}
+  .scard .ph.deep{color:#a99ffa}
+  .scard .ph.light{color:var(--warn)}
+  .scard small{display:block;color:var(--mut);font-size:12px;margin-top:8px}
   code.fam{font-size:18px;letter-spacing:1px;color:var(--ok)}
   #toast{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 14px);max-width:496px;margin:0 auto;background:#3a3550;border-radius:16px;
          padding:12px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;box-shadow:0 8px 24px #0008;font-size:15px;z-index:9}
@@ -183,6 +196,7 @@
 
     <div id="feedBanner"></div>
     <section class="status" id="status"></section>
+    <section id="sleepCard"></section>
 
     <button class="cry" id="cryBtn">
       <span id="cryTxt">Está llorando</span>
@@ -584,7 +598,7 @@ function render() {
   sb.classList.toggle('on', sl);
   renderBanner();
   renderPending();
-  renderWxAsk(); showWx(); renderAge();
+  renderWxAsk(); showWx(); renderAge(); renderSleepCard();
 }
 
 /* ====== Tomas: pecho (cronómetro y lado) o tetero (onzas) ====== */
@@ -900,7 +914,7 @@ function buildDay(off) {
   });
   diapers.forEach(e => items.push({ k: 'dp', a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: `🧷 Cambio de pañal${e.poop ? ' · 💩 popó' : ''}`, by: who(e) }));
   cries.forEach(c => items.push({ k: 'cr', a: c.t, b: c.t, t: c.t, h: hhmm(c.t), x: `😢 Lloró${c.label ? ` → la calmó: ${Lb(c.label).e} ${Lb(c.label).t}` : ` · sugerí ${Lb(topOf(c.pred.p)).e} (sin marcar)`}`, by: who(c) }));
-  sleeps.forEach(s => items.push({ k: 'sl', a: s.ca, b: s.cb, t: s.ca, h: `${s.a < d0 ? 'ayer ' + hhmm(s.a) : hhmm(s.ca)}–${s.on && s.cb >= now() - 1000 ? 'ahora' : hhmm(s.cb)}`, x: `😴 Durmió ${dur(s.cb - s.ca)}${s.on ? ' · sigue dormida' : ''}`, by: who(s) }));
+  sleeps.forEach(s => items.push({ k: 'sl', a: s.ca, b: s.cb, t: s.ca, h: `${s.a < d0 ? 'ayer ' + hhmm(s.a) : hhmm(s.ca)}–${s.on && s.cb >= now() - 1000 ? 'ahora' : hhmm(s.cb)}`, x: `😴 Durmió ${dur(s.cb - s.ca)}${cycleCount(s.cb - s.ca, new Date(s.a)) ? ` · ${cycleCount(s.cb - s.ca, new Date(s.a))}` : ''}${s.on ? ' · sigue dormida' : ''}`, by: who(s) }));
   awakes.forEach(s => items.push({ k: 'aw', a: s.ca, b: s.cb, t: s.ca, h: `${hhmm(s.ca)}–${s.on ? 'ahora' : hhmm(s.cb)}`, x: `☀️ Despierta ${dur(s.cb - s.ca)}`, by: '' }));
   items.sort((a, b) => b.t - a.t);            // del más reciente al más temprano
   return { d0, d1, feeds, diapers, cries, sleeps, awakes, breastMin, oz, sleepMs, awakeMs, items };
@@ -1128,6 +1142,42 @@ function openBaby() {
   };
 }
 $('ageBtn').onclick = openBaby;
+
+/* ====== Ciclos de sueño ======
+   Duración aproximada de un ciclo según la edad (NHS, Sleep Foundation, Pampers):
+   0-3 meses ~45 min · 3-6 meses ~50 · 6-12 meses ~60 · más de 1 año ~70 */
+function cycleMin(at = new Date()) {
+  const a = BABY && BABY.birth ? ageParts(BABY.birth, at) : null;
+  if (!a) return 45;
+  return a.m < 3 ? 45 : a.m < 6 ? 50 : a.m < 12 ? 60 : 70;
+}
+function cycleCount(ms, at) {
+  const n = Math.floor(ms / 60000 / cycleMin(at));
+  return n < 1 ? '' : `${n} ${n === 1 ? 'ciclo completo' : 'ciclos completos'}`;
+}
+function renderSleepCard() {
+  const el = $('sleepCard'), ls = last(['sleep', 'wake']);
+  if (!ls || ls.type !== 'sleep') { el.innerHTML = ''; return; }
+  const len = cycleMin(), m = mins(ls.t), done = Math.floor(m / len), into = m - done * len;
+  const left = Math.max(1, Math.ceil(len - into)), frac = into / len, curN = done + 1;
+  const shown = Math.min(Math.max(curN, 3), 8);
+  const dots = Array.from({ length: shown }, (_, k) => k < done ? '<i class="done"></i>'
+    : k === done && curN <= shown ? `<i class="cur" style="--p:${Math.round(frac * 100)}%"></i>` : '<i></i>').join('');
+  const status = done === 0
+    ? `En su <b>primer ciclo</b> · le faltan <b>${left} min</b> para completarlo`
+    : `<b>${done} ${done === 1 ? 'ciclo completo' : 'ciclos completos'}</b> · va en el ${curN}.º y le faltan <b>${left} min</b>`;
+  const phase = frac < 0.22 ? `<span class="ph">🌙 Quedándose dormida · si se mueve o se queja, espera un poco</span>`
+    : frac < 0.67 ? `<span class="ph deep">💤 Sueño profundo · buen momento para pasarla a la cuna</span>`
+    : `<span class="ph light">🌤️ Sueño ligero · puede despertarse al final del ciclo</span>`;
+  const age = BABY && BABY.birth ? ageParts(BABY.birth) : null;
+  el.innerHTML = `<div class="scard">
+    <div class="top"><b>😴 Dormida ${fmt(m)}</b><span>desde ${hhmm(ls.t)}</span></div>
+    <div class="cyc">${dots}</div>
+    <p>${status}</p>
+    ${phase}
+    <small>A ${age ? `su edad (${age.m} ${age.m === 1 ? 'mes' : 'meses'})` : 'esta edad'} cada ciclo dura unos <b>${len} min</b>. Al terminar uno, se vuelve a dormir o se despierta. Es un promedio: cada bebé es distinto.${age ? '' : ' Pon la fecha de nacimiento arriba para ajustarlo.'}</small>
+  </div>`;
+}
 
 /* ====== Quién está en línea (solo la administradora) ====== */
 const ONLINE_MS = 2.5 * 60000;
