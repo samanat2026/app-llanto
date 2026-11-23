@@ -121,6 +121,13 @@
   .lane .aw{background:#ffd27a2e}
   .lane .fb{background:var(--acc);min-width:3px}
   .lane .fo{background:#ffb3cf;min-width:3px}
+  .lane{cursor:pointer}
+  .lane i.sel{box-shadow:inset 0 0 0 2px #fff;z-index:2}
+  .lane .mk.sel{outline:none;filter:drop-shadow(0 0 4px #fff);font-size:18px;top:3px}
+  .dtip{background:var(--card2);border-radius:12px;padding:10px 12px;margin:4px 0 8px;font-size:14px;min-height:44px}
+  .dtip b{display:block;font-size:15px;margin-bottom:2px}
+  .dtip span{color:var(--mut);font-size:13px}
+  .dtip .why{margin:0}
   .lane .mk{position:absolute;top:5px;font-size:14px;transform:translateX(-50%);font-style:normal;line-height:1}
   .hours{display:flex;justify-content:space-between;font-size:10.5px;color:var(--mut)}
   .nowline{position:absolute;top:14px;bottom:16px;width:2px;background:#ffffffaa;z-index:1}
@@ -887,15 +894,15 @@ function buildDay(off) {
     if (f.mode === 'breast') {
       const sides = (f.segs || []).map(s => s.s === 'izq' ? 'izq' : 'der').join(' → ');
       const end = f.end || now();
-      items.push({ t: f.t, h: `${hhmm(f.t)}–${f.end ? hhmm(end) : 'ahora'}`, x: `🤱 Pecho ${f.mins || Math.round(activeMs(f) / 60000)} min${sides ? ` (${sides})` : ''}${f.pauses && f.pauses.length ? ' · con pausas' : ''}${f.end ? '' : ' · en curso'}`, by: who(f) });
-    } else if (f.mode === 'bottle') items.push({ t: f.t, h: hhmm(f.t), x: `🍼 Tetero ${String(f.oz).replace('.', ',')} oz`, by: who(f) });
-    else items.push({ t: f.t, h: hhmm(f.t), x: '🍼 Comió', by: who(f) });
+      items.push({ k: 'fb', a: f.t, b: end, t: f.t, h: `${hhmm(f.t)}–${f.end ? hhmm(end) : 'ahora'}`, x: `🤱 Pecho ${f.mins || Math.round(activeMs(f) / 60000)} min${sides ? ` (${sides})` : ''}${f.pauses && f.pauses.length ? ' · con pausas' : ''}${f.end ? '' : ' · en curso'}`, by: who(f) });
+    } else if (f.mode === 'bottle') items.push({ k: 'fo', a: f.t, b: f.t, t: f.t, h: hhmm(f.t), x: `🍼 Tetero ${String(f.oz).replace('.', ',')} oz`, by: who(f) });
+    else items.push({ k: 'fo', a: f.t, b: f.t, t: f.t, h: hhmm(f.t), x: '🍼 Comió', by: who(f) });
   });
-  diapers.forEach(e => items.push({ t: e.t, h: hhmm(e.t), x: `🧷 Cambio de pañal${e.poop ? ' · 💩 popó' : ''}`, by: who(e) }));
-  cries.forEach(c => items.push({ t: c.t, h: hhmm(c.t), x: `😢 Lloró${c.label ? ` → la calmó: ${Lb(c.label).e} ${Lb(c.label).t}` : ` · sugerí ${Lb(topOf(c.pred.p)).e} (sin marcar)`}`, by: who(c) }));
-  sleeps.forEach(s => items.push({ t: s.ca, h: `${s.a < d0 ? 'ayer ' + hhmm(s.a) : hhmm(s.ca)}–${s.on && s.cb >= now() - 1000 ? 'ahora' : hhmm(s.cb)}`, x: `😴 Durmió ${dur(s.cb - s.ca)}${s.on ? ' · sigue dormida' : ''}`, by: who(s) }));
-  awakes.forEach(s => items.push({ t: s.ca, h: `${hhmm(s.ca)}–${s.on ? 'ahora' : hhmm(s.cb)}`, x: `☀️ Despierta ${dur(s.cb - s.ca)}`, by: '' }));
-  items.sort((a, b) => a.t - b.t);
+  diapers.forEach(e => items.push({ k: 'dp', a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: `🧷 Cambio de pañal${e.poop ? ' · 💩 popó' : ''}`, by: who(e) }));
+  cries.forEach(c => items.push({ k: 'cr', a: c.t, b: c.t, t: c.t, h: hhmm(c.t), x: `😢 Lloró${c.label ? ` → la calmó: ${Lb(c.label).e} ${Lb(c.label).t}` : ` · sugerí ${Lb(topOf(c.pred.p)).e} (sin marcar)`}`, by: who(c) }));
+  sleeps.forEach(s => items.push({ k: 'sl', a: s.ca, b: s.cb, t: s.ca, h: `${s.a < d0 ? 'ayer ' + hhmm(s.a) : hhmm(s.ca)}–${s.on && s.cb >= now() - 1000 ? 'ahora' : hhmm(s.cb)}`, x: `😴 Durmió ${dur(s.cb - s.ca)}${s.on ? ' · sigue dormida' : ''}`, by: who(s) }));
+  awakes.forEach(s => items.push({ k: 'aw', a: s.ca, b: s.cb, t: s.ca, h: `${hhmm(s.ca)}–${s.on ? 'ahora' : hhmm(s.cb)}`, x: `☀️ Despierta ${dur(s.cb - s.ca)}`, by: '' }));
+  items.sort((a, b) => b.t - a.t);            // del más reciente al más temprano
   return { d0, d1, feeds, diapers, cries, sleeps, awakes, breastMin, oz, sleepMs, awakeMs, items };
 }
 function dayTitle(off, d0) {
@@ -919,6 +926,10 @@ function openDay(off = 0) {
   const pos = t => ((t - R.d0) / span * 100).toFixed(2) + '%';
   const wid = (a, b) => Math.max(0.4, (b - a) / span * 100).toFixed(2) + '%';
   const nowIn = now() >= R.d0 && now() < R.d1;
+  const LANES = { sueno: ['aw', 'sl'], tomas: ['fb', 'fo'], marcas: ['dp', 'cr'] };
+  const laneEls = ks => R.items.map((it, i) => !ks.includes(it.k) ? ''
+    : it.k === 'dp' || it.k === 'cr' ? `<em class="mk" data-i="${i}" style="left:${pos(it.a)}">${it.k === 'dp' ? '🧷' : '😢'}</em>`
+    : `<i class="${it.k}" data-i="${i}" style="left:${pos(it.a)};width:${it.k === 'fo' ? '0.8%' : wid(it.a, it.b)}"></i>`).join('');
   sec.innerHTML = `<div class="wrap">
     <div class="dnav">
       <button class="icon-btn" id="dPrev" aria-label="Día anterior">‹</button>
@@ -938,15 +949,14 @@ function openDay(off = 0) {
     <div class="tl">
       ${nowIn ? `<div class="nowline" style="left:${pos(now())}"></div>` : ''}
       <p class="lanelbl">Sueño</p>
-      <div class="lane">${R.awakes.map(s => `<i class="aw" style="left:${pos(s.ca)};width:${wid(s.ca, s.cb)}"></i>`).join('')}${R.sleeps.map(s => `<i class="sl" style="left:${pos(s.ca)};width:${wid(s.ca, s.cb)}"></i>`).join('')}</div>
+      <div class="lane" data-lane="sueno">${laneEls(['aw', 'sl'])}</div>
       <p class="lanelbl">Tomas</p>
-      <div class="lane">${R.feeds.map(f => f.mode === 'breast'
-        ? `<i class="fb" style="left:${pos(f.t)};width:${wid(f.t, f.end || now())}"></i>`
-        : `<i class="fo" style="left:${pos(f.t)};width:0.8%"></i>`).join('')}</div>
+      <div class="lane" data-lane="tomas">${laneEls(['fb', 'fo'])}</div>
       <p class="lanelbl">Pañal y llanto</p>
-      <div class="lane">${R.diapers.map(e => `<em class="mk" style="left:${pos(e.t)}">🧷</em>`).join('')}${R.cries.map(c => `<em class="mk" style="left:${pos(c.t)}">😢</em>`).join('')}</div>
+      <div class="lane" data-lane="marcas">${laneEls(['dp', 'cr'])}</div>
       <div class="hours"><span>12am</span><span>3</span><span>6am</span><span>9</span><span>12pm</span><span>3</span><span>6pm</span><span>9</span><span>12am</span></div>
     </div>
+    <div class="dtip" id="dTip"><span class="why">👆 Toca una barra o un ícono para ver la hora y los detalles.</span></div>
     <div class="legend">
       <span style="--c:#7b6cf6">Dormida</span><span style="--c:#ffd27a55">Despierta</span>
       <span style="--c:var(--acc)">Pecho</span><span style="--c:#ffb3cf">Tetero</span>
@@ -960,6 +970,24 @@ function openDay(off = 0) {
     <p class="note">Útil para llevarle al pediatra. "Despierta" se calcula entre los registros de sueño.</p>
   </div>`;
   sec.hidden = false; sec.scrollTop = 0;
+  // Tocar el cronograma: muestra el registro que esté en ese punto (o el más cercano)
+  sec.querySelectorAll('.lane').forEach(lane => lane.onclick = ev => {
+    const r = lane.getBoundingClientRect(), t = R.d0 + (ev.clientX - r.left) / r.width * span;
+    const tol = 75 * 60000;
+    let best = -1, bd = Infinity;
+    R.items.forEach((it, i) => {
+      if (!LANES[lane.dataset.lane].includes(it.k)) return;
+      let d = t < it.a ? it.a - t : t > it.b ? t - it.b : 0;
+      if (it.k === 'aw' && d === 0) d = 1;             // si coincide con algo más concreto, gana lo concreto
+      if (d < bd) { bd = d; best = i; }
+    });
+    sec.querySelectorAll('.lane .sel').forEach(x => x.classList.remove('sel'));
+    const tip = $('dTip');
+    if (best < 0 || bd > tol) { tip.innerHTML = '<span class="why">No hay registros a esa hora.</span>'; return; }
+    const it = R.items[best];
+    sec.querySelector(`.lane [data-i="${best}"]`).classList.add('sel');
+    tip.innerHTML = `<b>${it.x}</b><span>🕐 ${it.h}${it.by ? ` · ${esc(it.by)}` : ''}</span>`;
+  });
   $('dPrev').onclick = () => openDay(dayOff - 1);
   $('dNext').onclick = () => openDay(dayOff + 1);
   $('dClose').onclick = () => { sec.hidden = true; };
