@@ -134,6 +134,8 @@
   .bgrid .stop{background:var(--ok);color:#111;font-weight:600}
   .resume{width:100%;background:#2d2a40;border:1px solid var(--ok);border-radius:16px;padding:14px;font-size:16px;margin-bottom:12px;text-align:left}
   .resume small{display:block;color:var(--mut);font-size:12px;margin-top:2px}
+  .wbell{background:var(--card2);border-radius:12px;padding:7px 10px;font-size:13px;min-height:0;white-space:nowrap;color:var(--tx)}
+  .wbell.on{background:#2e5a43;color:#c9f5dc}
   .bellyrow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
   .bellybtn{width:100%;background:var(--card);border-radius:16px;padding:11px;font-size:14.5px;color:var(--tx)}
   .bellybtn:active{background:var(--card2)}
@@ -371,6 +373,7 @@ async function initCloud(code) {
     return tk;
   };
   cloud.notifOff = () => F.setDoc(myDoc, { notif: false }, { merge: true });
+  cloud.setWatch = names => F.setDoc(myDoc, { watch: names }, { merge: true });
   cloud.watchMembers = (cb, onErr) => F.onSnapshot(F.collection(db, 'families', code, 'members'),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onErr);
   const since = now() - 120 * 864e5;
@@ -1664,7 +1667,7 @@ function whenTxt(t) {
 }
 function openWho() {
   const sh = $('sheet');
-  let list = [], unsub = null, tick = null;
+  let list = [], unsub = null, tick = null, watch = [];
   const close = () => { if (unsub) unsub(); clearInterval(tick); sh.hidden = true; sh.innerHTML = ''; };
   const draw = () => {
     const rows = list.map(x => ({ ...x, seen: x.seen || x.t || 0 }))
@@ -1674,17 +1677,23 @@ function openWho() {
     sh.innerHTML = `<div class="sheet">
       <h3 style="margin-top:0">🟢 Quién está en línea</h3>
       <p class="note" style="margin-top:0">${n ? `${n} ${n === 1 ? 'persona' : 'personas'} con la app abierta ahora` : 'Nadie más tiene la app abierta ahora'}</p>
-      ${rows.length ? rows.map(x => `<div class="who"><i class="dot ${x.online ? 'on' : ''}"></i><div>
+      ${rows.length ? rows.map(x => { const key = String(x.name || '').trim().toLowerCase(), on = watch.includes(key);
+        return `<div class="who"><i class="dot ${x.online ? 'on' : ''}"></i><div style="flex:1">
         <b>${esc(x.name || 'Sin nombre')}${x.id === cloud.uid ? ' (tú)' : ''}</b>
         <small>${x.online ? '<span class="on-t">En línea ahora</span>' : x.seen ? `Entró ${agoTxt(x.seen)} · ${whenTxt(x.seen)}` : 'Aún no ha entrado'}</small>
-      </div></div>`).join('') : '<p class="note">Cargando…</p>'}
-      <p class="note">Solo tú ves esta lista. Si alguien aparece dos veces es porque entró desde otro celular o navegador.</p>
+      </div>${x.id !== cloud.uid && key ? `<button class="wbell ${on ? 'on' : ''}" data-w="${esc(key)}">${on ? '🔔 Te aviso' : '🔕 Avisarme'}</button>` : ''}</div>`; }).join('') : '<p class="note">Cargando…</p>'}
+      <p class="note">Solo tú ves esta lista. Con <b>🔔</b> te llega una notificación cada vez que esa persona abre la app (puede tardar hasta 10 min). Si alguien aparece dos veces es porque entró desde otro celular o navegador.</p>
       <button class="later" id="whoClose">Cerrar</button></div>`;
     $('whoClose').onclick = close;
+    sh.querySelectorAll('[data-w]').forEach(b => b.onclick = async () => {
+      const k = b.dataset.w, nw = watch.includes(k) ? watch.filter(x => x !== k) : [...watch, k];
+      try { await cloud.setWatch(nw); watch = nw; draw(); toast(nw.includes(k) ? '🔔 Te aviso cuando entre' : 'Ya no te aviso'); }
+      catch (e) { console.error(e); toast('No pude guardarlo, intenta de nuevo'); }
+    });
   };
   sh.onclick = e => { if (e.target === sh) close(); };
   sh.hidden = false; draw();
-  unsub = cloud.watchMembers(a => { list = a; draw(); }, err => { console.error(err); close(); toast('No pude ver la lista. Revisa que publicaste las reglas nuevas.'); });
+  unsub = cloud.watchMembers(a => { list = a; const mine = a.find(x => x.id === cloud.uid); if (mine && Array.isArray(mine.watch)) watch = mine.watch; draw(); }, err => { console.error(err); close(); toast('No pude ver la lista. Revisa que publicaste las reglas nuevas.'); });
   tick = setInterval(draw, 30000);
 }
 

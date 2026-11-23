@@ -4,9 +4,10 @@
  * Cada 10 minutos revisa los registros de la familia en Firebase y le manda
  * una notificación SOLO a la administradora (la mamá) cuando:
  *   🍼 ya le va tocando comer
- *   🧷 lleva más de 2 h 30 sin cambio de pañal (y está despierta)
+ *   🧷 pasó el tiempo con que suelen cambiarle el pañal (y está despierta)
  *   😴 lleva despierta más de lo que suele aguantar
  *   ☀️ se acerca la hora en que suele despertar (noche o siesta)
+ *   🟢 entra a la app alguien que ella marcó con 🔔 en «Quién está en línea»
  *
  * Secretos que se configuran en Cloudflare (Settings → Variables and Secrets):
  *   FAM      → el código de familia (ej. K7P3-Q9XD-M2RT)
@@ -101,6 +102,11 @@ async function eventsSince(fam, since, H) {
   });
   if (!r.ok) throw new Error(`Firestore ${r.status}: ${await r.text()}`);
   return (await r.json()).filter(x => x.document).map(x => fields(x.document.fields || {}));
+}
+async function listMembers(fam, H) {
+  const r = await fetch(`${FS}/families/${fam}/members?pageSize=100`, { headers: H });
+  if (!r.ok) throw new Error(`Firestore ${r.status}: ${await r.text()}`);
+  return ((await r.json()).documents || []).map(d => ({ id: d.name.split('/').pop(), ...fields(d.fields || {}) }));
 }
 async function patchMember(fam, uid, data, H) {
   const enc = v => v == null ? { nullValue: null } : typeof v === 'string' ? { stringValue: v }
@@ -239,6 +245,27 @@ async function check(env, test = false) {
     notified[a.k] = a.id;
   }
   if (alerts.length) upd.notified = notified;
+
+  // 🟢 Avisar cuando entra alguien que la administradora marcó con 🔔 (por nombre, aunque entre desde varios celulares)
+  const watch = (me.watch || []).map(n => String(n).trim().toLowerCase()).filter(Boolean);
+  const entered = [];
+  if (watch.length) {
+    const members = await listMembers(fam, H), prev = me.watchSeen || {}, seenNow = {};
+    for (const n of watch) {
+      const seen = Math.max(0, ...members.filter(m => m.id !== famDoc.owner && String(m.name || '').trim().toLowerCase() === n).map(m => m.seen || m.t || 0));
+      if (!seen) continue;
+      seenNow[n] = seen;
+      const recent = Date.now() - seen < 11 * 60000;               // estuvo en la app desde la última revisión
+      const newSession = prev[n] == null || seen - prev[n] > 12 * 60000;
+      if (recent && newSession) {
+        const who = members.find(m => String(m.name || '').trim().toLowerCase() === n).name;
+        const r = await send(me.fcm, `🟢 ${who} entró a la app`, `Se conectó a las ${hhmm(seen)}.`, 'online-' + n, H);
+        if (r === 'gone') { await patchMember(fam, famDoc.owner, { fcm: null }, H); return 'El celular ya no está registrado. Vuelve a activar las notificaciones en la app.'; }
+        entered.push(who);
+      }
+    }
+    upd.watchSeen = seenNow;
+  }
   if (Object.keys(upd).length) await patchMember(fam, famDoc.owner, upd, H);
-  return `Revisé ${events.length} registros · ${asleep ? 'dormida' : 'despierta'} · come cada ~${fmt(feedInt)} · aguanta despierta ~${fmt(wakeWin)} · avisos enviados: ${alerts.length ? alerts.map(a => a.title).join(' | ') : 'ninguno'}`;
+  return `Revisé ${events.length} registros · ${asleep ? 'dormida' : 'despierta'} · come cada ~${fmt(feedInt)} · aguanta despierta ~${fmt(wakeWin)} · avisos enviados: ${alerts.length ? alerts.map(a => a.title).join(' | ') : 'ninguno'}${entered.length ? ` · entraron: ${entered.join(', ')}` : ''}`;
 }
