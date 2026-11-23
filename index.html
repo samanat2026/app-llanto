@@ -63,6 +63,21 @@
   .pend button{background:var(--card2);border-radius:10px;width:34px;height:38px;font-size:17px;padding:0}
   .wx{font-size:12px;color:var(--mut)}
   .menu p{margin:6px 0;font-size:14px}
+  .mfam{background:linear-gradient(160deg,#3a2448,#241d33);border-radius:16px;padding:14px;text-align:center}
+  .mfam small{display:block;color:var(--mut);font-size:12px}
+  .mfam code.fam{display:block;font-size:24px;margin:4px 0 6px;letter-spacing:1px}
+  .mfam span{font-size:13.5px;color:#d9cfe6}
+  .menu .mh{font-size:12px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin:18px 4px 8px}
+  .mlist{background:var(--card2);border-radius:16px;overflow:hidden}
+  .mrow{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border-top:1px solid #ffffff0d;background:none;color:var(--tx);text-align:left;text-decoration:none;cursor:pointer;font-size:15px;border-radius:0}
+  .mrow:first-child{border-top:0}
+  .mrow:active{background:#ffffff0a}
+  .mrow .ic{width:32px;height:32px;flex:none;border-radius:10px;background:#ffffff10;display:flex;align-items:center;justify-content:center;font-size:17px}
+  .mrow .mt{flex:1;min-width:0}
+  .mrow .mt b{display:block;font-weight:500}
+  .mrow .mt small{display:block;color:var(--mut);font-size:12px;margin-top:2px;line-height:1.35}
+  .mrow::after{content:'›';color:var(--mut);font-size:20px}
+  .mrow.danger .mt b{color:#ff8a8a}
   .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
   .row button,.row label,.row a{background:var(--card2);border-radius:12px;padding:10px 12px;font-size:14px;cursor:pointer;color:var(--tx);text-decoration:none}
   .danger{color:#ff8a8a!important}
@@ -141,8 +156,41 @@
   .bellybtn{width:100%;background:var(--card);border-radius:16px;padding:11px;font-size:14.5px;color:var(--tx)}
   .bellybtn:active{background:var(--card2)}
   .daybtn{width:100%;margin-top:12px;background:var(--card);border-radius:16px;padding:15px;font-size:15px}
-  #day{position:fixed;inset:0;background:var(--bg);z-index:7;overflow:auto}
-  #day .wrap{max-width:520px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 12px) 16px 60px}
+  #day,#learn{position:fixed;inset:0;background:var(--bg);z-index:7;overflow:auto}
+  .learnbtn{margin-top:10px}
+  .lsub{color:var(--mut);font-size:13px;margin:6px 4px 14px;line-height:1.4}
+  .lcard{background:var(--card);border-radius:20px;padding:16px;margin-bottom:12px}
+  .lcard h3{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:16px}
+  .lcard h3 span{width:34px;height:34px;border-radius:11px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:18px}
+  .lcard h4{font-size:12px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin:14px 0 8px}
+  .lhl{background:linear-gradient(160deg,#3a2448,#241d33);border:1px solid #ff7aa833}
+  .lhl ul{list-style:none;margin:0;padding:0}
+  .lhl li{display:flex;gap:10px;padding:9px 0;border-top:1px solid #ffffff12}
+  .lhl li:first-child{border-top:0;padding-top:0}
+  .lhl li span{font-size:18px;line-height:1.3}
+  .lhl li p{margin:0;font-size:14px;line-height:1.45}
+  .lhl b,.lline b{color:#ffc3dc}
+  .lkv{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .lkv div{background:var(--card2);border-radius:14px;padding:10px 12px}
+  .lkv div:last-child:nth-child(odd){grid-column:span 2}
+  .lkv b{display:block;font-size:18px}
+  .lkv small{color:var(--mut);font-size:11.5px;line-height:1.3;display:block;margin-top:2px}
+  .lline{font-size:13.5px;margin:12px 0 0;line-height:1.45}
+  .lline em{font-style:normal;font-size:12px;padding:2px 7px;border-radius:8px;margin-left:4px}
+  .lline em.up{background:#2e5a43;color:#c9f5dc}
+  .lline em.dn{background:#5a3a2e;color:#ffd9c9}
+  .lbars div{display:grid;grid-template-columns:118px 1fr 58px;align-items:center;gap:8px;margin:7px 0;font-size:13px}
+  .lbars span small{display:block;color:var(--mut);font-size:10.5px}
+  .lbars i{height:8px;border-radius:4px;background:var(--card2);overflow:hidden}
+  .lbars u{display:block;height:100%;background:linear-gradient(90deg,#c45ad8,var(--acc));border-radius:4px}
+  .lbars b{text-align:right;font-size:13px}
+  .lprog{height:8px;border-radius:4px;background:var(--card2);overflow:hidden;margin:12px 0 6px}
+  .lprog i{display:block;height:100%;background:linear-gradient(90deg,#c45ad8,var(--acc))}
+  .lnote{color:var(--mut);font-size:12px;line-height:1.45;margin:8px 0 0}
+  .lnone{color:var(--mut);font-size:13.5px;margin:0}
+  .ltags{display:flex;flex-wrap:wrap;gap:6px}
+  .ltags span{background:var(--card2);border-radius:10px;padding:6px 9px;font-size:12.5px}
+  #day .wrap,#learn .wrap{max-width:520px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 12px) 16px 60px}
   .dnav{display:flex;align-items:center;gap:8px}
   .dnav h2{flex:1;text-align:center;font-size:17px;margin:0}
   .dnav button:disabled{opacity:.3}
@@ -251,6 +299,7 @@
     <div class="bellyrow"><button class="bellybtn" id="bellyBtn">🎈 Panza durita</button><button class="bellybtn" id="pushBtn">😤 Pujó</button></div>
 
     <button class="daybtn" id="dayBtn">📊 Resumen y cronograma del día</button>
+    <button class="daybtn learnbtn" id="learnBtn">🧠 Lo que he aprendido</button>
     <section id="wxAsk"></section>
 
     <section id="pending"></section>
@@ -259,6 +308,7 @@
 </main>
 <div id="sheet" class="sheet-bg" hidden></div>
 <section id="day" hidden></section>
+<section id="learn" hidden></section>
 <div id="toast" hidden></div>
 
 <script src="firebase-config.js"></script>
@@ -404,17 +454,59 @@ function median(a) {
   a = [...a].sort((x, y) => x - y); const m = a.length >> 1;
   return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
 }
-/* Ritmos aprendidos de ella */
-function feedInterval() {
-  const f = D.events.filter(e => e.type === 'feed').map(e => e.t).sort((a, b) => a - b), d = [];
-  for (let i = 1; i < f.length; i++) { const x = (f[i] - f[i - 1]) / 60000; if (x >= 30 && x <= 360) d.push(x); }
-  return median(d.slice(-15)) || 180;
+/* ====== Ritmos aprendidos de ella ======
+   - Los últimos días pesan más (cada 2 días un registro vale la mitad).
+   - Se separan por momento del día: madrugada, mañana, tarde y noche.
+   - Si en ese momento del día todavía hay pocos datos, usa el valor de todo el día. */
+const DAY = 864e5;
+const BLOCKS = [
+  { k: 'madrugada', a: 0, b: 6, e: '🌌', n: 'Madrugada', r: '12–6 am' },
+  { k: 'manana', a: 6, b: 12, e: '🌅', n: 'Mañana', r: '6 am–12 m' },
+  { k: 'tarde', a: 12, b: 17, e: '☀️', n: 'Tarde', r: '12–5 pm' },
+  { k: 'noche', a: 17, b: 24, e: '🌙', n: 'Noche', r: '5 pm–12' }
+];
+const blockOf = t => { const d = new Date(t), h = d.getHours() + d.getMinutes() / 60; return BLOCKS.find(B => h >= B.a && h < B.b); };
+const recW = t => Math.pow(0.5, (now() - t) / (2 * DAY));
+function wmedian(arr) {
+  if (!arr.length) return null;
+  const s = [...arr].sort((a, b) => a.v - b.v), tot = s.reduce((x, o) => x + o.w, 0); let acc = 0;
+  for (const o of s) { acc += o.w; if (acc >= tot / 2) return o.v; }
+  return s[s.length - 1].v;
 }
-function wakeWindow() {
-  const ev = D.events.filter(e => e.type === 'sleep' || e.type === 'wake').sort((a, b) => a.t - b.t), d = [];
-  for (let i = 1; i < ev.length; i++)
-    if (ev[i - 1].type === 'wake' && ev[i].type === 'sleep') { const x = (ev[i].t - ev[i - 1].t) / 60000; if (x >= 20 && x <= 240) d.push(x); }
-  return median(d.slice(-15)) || 80;
+function feedGaps(days = 10) {
+  const f = D.events.filter(e => e.type === 'feed' && e.t > now() - days * DAY).map(e => e.t).sort((a, b) => a - b), d = [];
+  for (let i = 1; i < f.length; i++) { const v = (f[i] - f[i - 1]) / 60000; if (v >= 30 && v <= 360) d.push({ v, t: f[i - 1], w: recW(f[i - 1]) }); }
+  return d;
+}
+function wakeGaps(days = 10) {
+  const sp = sleepSpans().filter(s => s.a > now() - days * DAY), d = [];
+  for (let i = 1; i < sp.length; i++) { const v = (sp[i].a - sp[i - 1].b) / 60000; if (v >= 20 && v <= 240) d.push({ v, t: sp[i - 1].b, w: recW(sp[i - 1].b) }); }
+  return d;
+}
+function atBlock(gaps, t, fallback) {
+  const B = blockOf(t), inB = gaps.filter(g => blockOf(g.t) === B);
+  return (inB.length >= 3 ? wmedian(inB) : null) || wmedian(gaps) || fallback;
+}
+function feedInterval(t = now()) { return atBlock(feedGaps(), t, 180); }
+function wakeWindow(t = now()) { return atBlock(wakeGaps(), t, 80); }
+
+/* Seno y sueño: ¿se duerme pegada al seno? ¿come al despertar? (últimos 2 días contra los anteriores) */
+function breastSleep(from, to) {
+  const spans = sleepSpans().filter(s => s.a >= from && s.a < to);
+  const feeds = D.events.filter(e => e.type === 'feed');
+  let atBreast = 0, wakes = 0, wakeFeed = 0;
+  for (const s of spans) {
+    if (feeds.some(f => f.t <= s.a && (f.end || f.t + 20 * 60000) >= s.a - 10 * 60000)) atBreast++;
+    if (!s.on && s.b < now() - 30 * 60000) { wakes++; if (feeds.some(f => f.t >= s.b - 5 * 60000 && f.t <= s.b + 30 * 60000)) wakeFeed++; }
+  }
+  const refuses = D.events.filter(e => e.type === 'refuse' && e.t >= from && e.t < to).length;
+  return { n: spans.length, atBreast, wakes, wakeFeed, refuses, rate: spans.length ? atBreast / spans.length : null, wf: wakes ? wakeFeed / wakes : null };
+}
+function breastPattern() {
+  const N = now(), R = breastSleep(N - 2 * DAY, N), B = breastSleep(N - 9 * DAY, N - 2 * DAY);
+  const changed = B.n >= 4 && R.n >= 3 && B.rate - R.rate >= 0.25;
+  const sleepsWithout = R.n >= 3 && R.rate <= 0.35 && (R.refuses >= 1 || changed);
+  return { R, B, changed, sleepsWithout };
 }
 function asleep() { const l = last(['sleep', 'wake']); return !!l && l.type === 'sleep'; }
 function getCtx() {
@@ -428,7 +520,7 @@ function getCtx() {
     sincePush: (() => { const b = last('push'); return b ? mins(b.t) : null; })(),
     sincePoop: (() => { const pp = D.events.filter(e => e.type === 'diaper' && e.poop).sort((a, b) => b.t - a.t)[0]; return pp ? mins(pp.t) : null; })(),
     hour: d.getHours() + d.getMinutes() / 60,
-    feedInt: feedInterval(), wakeWin: wakeWindow(),
+    feedInt: feedInterval(), wakeWin: wakeWindow(), noBreastSleep: breastPattern().sleepsWithout,
     tOut: outsideTemp()
   };
 }
@@ -447,7 +539,7 @@ function diaperInt() {
 const sig = (x, mid, w) => 1 / (1 + Math.exp(-(x - mid) / w));
 function normP(s) { const t = KEYS.reduce((a, k) => a + s[k], 0) || 1, o = {}; KEYS.forEach(k => o[k] = s[k] / t); return o; }
 function prior(c) {
-  return normP({
+  const p = normP({
     hambre: (c.sinceFeed == null ? 0.35 : 0.05 + 0.9 * sig(c.sinceFeed, c.feedInt * 0.85, 15)) * (c.sinceRefuse != null && c.sinceRefuse <= 30 ? 0.35 : 1),
     sueno:  c.awake == null ? 0.3 : 0.05 + 0.85 * sig(c.awake, c.wakeWin * 0.9, 12),
     panal:  c.sinceDiaper == null ? 0.3 : 0.05 + 0.7 * sig(c.sinceDiaper, diaperInt(), diaperInt() / 6),
@@ -455,7 +547,12 @@ function prior(c) {
     colico: colicPrior(c),
     otro: 0.12
   });
+  // Últimamente se duerme sin seno y come al despertar: si lleva rato despierta y comió hace poco, es más sueño que hambre
+  if (sleepyNotHungry(c)) { p.hambre *= 0.55; p.sueno *= 1.5; return normP(p); }
+  return p;
 }
+const sleepyNotHungry = c => !!c.noBreastSleep && c.awake != null && c.awake > 0 && c.awake >= c.wakeWin * 0.75
+  && c.sinceFeed != null && c.sinceFeed < c.feedInt * 0.9;
 function tempPrior(c) {
   if (c.tOut != null) return {                       // con clima de afuera
     frio:  0.03 + 0.17 * sig(16 - c.tOut, 0, 2),
@@ -631,7 +728,7 @@ const hhmm = t => { const d = new Date(t), h = d.getHours(); return `${h % 12 ||
 const esc = s => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function why(k, c) {
   if (k === 'hambre') return c.sinceFeed == null ? 'Aún no hay tomas registradas' : `Comió hace ${fmt(c.sinceFeed)} · suele comer cada ${fmt(c.feedInt)}`;
-  if (k === 'sueno') return c.awake == null ? 'Aún no hay sueño registrado' : (c.awake === 0 ? 'Estaba dormida' : `Lleva ${fmt(c.awake)} despierta · aguanta ~${fmt(c.wakeWin)}`);
+  if (k === 'sueno') return c.awake == null ? 'Aún no hay sueño registrado' : (c.awake === 0 ? 'Estaba dormida' : `Lleva ${fmt(c.awake)} despierta · a esta hora aguanta ~${fmt(c.wakeWin)}${sleepyNotHungry(c) ? ' · últimamente se duerme sin seno y come al despertar' : ''}`);
   if (k === 'panal') return c.sinceDiaper == null ? 'Aún no hay pañales registrados' : `Último pañal hace ${fmt(c.sinceDiaper)} · suelen cambiarla cada ~${fmt(diaperInt())}`;
   if (k === 'colico') {
     const r = [];
@@ -945,6 +1042,7 @@ function logDiaper() {
     { t: 'Fue hace 15 min', keep: true, fn: span => { shiftEvent(e.id, 15); back += 15; render(); span.textContent = txt(); } }
   ]);
 }
+$('learnBtn').onclick = openLearn;
 $('bellyBtn').onclick = () => quickLog('belly', '🎈 Panza durita');
 $('pushBtn').onclick = () => quickLog('push', '😤 Pujó');
 $('sleepBtn').onclick = () => asleep() ? quickLog('wake', '☀️ Se despertó') : quickLog('sleep', '😴 Se durmió');
@@ -1231,32 +1329,37 @@ $('menuBtn').onclick = () => {
   const fe = D.events.filter(e => e.type === 'feed' && e.t >= d0.getTime());
   const oz = fe.filter(e => e.mode === 'bottle').reduce((a, e) => a + (+e.oz || 0), 0);
   const bm = fe.filter(e => e.mode === 'breast' && e.mins).reduce((a, e) => a + e.mins, 0);
+  const row = (id, ic, t, sub = '', cls = '', tag = 'button', extra = '') =>
+    `<${tag} class="mrow ${cls}" id="${id}" ${extra}><span class="ic">${ic}</span><span class="mt"><b>${t}</b>${sub ? `<small>${sub}</small>` : ''}</span>${tag === 'label' ? '<input type="file" id="impIn" accept="application/json" hidden>' : ''}</${tag}>`;
+  const owner = cloud && cloud.owner && cloud.owner === cloud.uid;
+  const notifOn = lsGet('llanto.notif') === '1';
   const famBox = cloud ? `
-    <h3 style="margin-top:0">Familia</h3>
-    <p>Código: <code class="fam">${esc(FAM)}</code> · Tú eres <b>${esc(ME)}</b></p>
-    <div class="row">
-      <a href="https://wa.me/?text=${encodeURIComponent('Únete a la app de llantos de la bebé (ábrelo en el celular y agrégalo a la pantalla de inicio): ' + link)}" target="_blank" rel="noopener">📲 Invitar por WhatsApp</a>
-      <button id="leaveBtn">Salir de la familia</button>
-    </div>
-    ${cloud.owner && cloud.owner === cloud.uid ? `<div class="row"><button id="whoBtn">🟢 Quién está en línea</button>
-      ${VAPID ? `<button id="notifBtn">${lsGet('llanto.notif') === '1' ? '🔕 Desactivar avisos' : '🔔 Activar avisos'}</button>` : ''}</div>
-      ${VAPID ? `<p class="note">Avisos solo para ti: cuando le toque comer, revisar el pañal, lleve mucho despierta o esté por despertar.</p>` : ''}` : ''}
-    ${cloud.owner === null ? `<div class="row"><button id="claimBtn">👑 Soy la mamá: activar mis opciones</button></div>
-      <p class="note">Solo debe tocarlo la mamá. La primera persona que lo toque queda como administradora y nadie más lo verá.</p>` : ''}` :
+    <div class="mfam"><small>Código de la familia</small><code class="fam">${esc(FAM)}</code><span>Tú eres <b>${esc(ME)}</b>${owner ? ' · 👑 administradora' : ''}</span></div>
+    <p class="mh">Familia</p>
+    <div class="mlist">
+      ${row('invBtn', '📲', 'Invitar por WhatsApp', 'Manda el enlace a otro cuidador', '', 'a', `href="https://wa.me/?text=${encodeURIComponent('Únete a la app de llantos de la bebé (ábrelo en el celular y agrégalo a la pantalla de inicio): ' + link)}" target="_blank" rel="noopener"`)}
+      ${owner ? row('whoBtn', '🟢', 'Quién está en línea', 'Y avisarte cuando alguien entre') : ''}
+      ${owner && VAPID ? row('notifBtn', notifOn ? '🔔' : '🔕', notifOn ? 'Avisos activados' : 'Activar avisos', notifOn ? 'Toca para desactivarlos · solo te llegan a ti' : 'Comer, pañal, mucho tiempo despierta, por despertar') : ''}
+      ${cloud.owner === null ? row('claimBtn', '👑', 'Soy la mamá: activar mis opciones', 'Solo la mamá. Quien lo toque primero queda como administradora') : ''}
+    </div>` :
     `<p class="note">Modo solo este celular. Para compartir con otros cuidadores, configura <b>firebase-config.js</b>.</p>`;
   m.innerHTML = famBox + `
-    <h3>Hoy</h3>
-    <p><b>${fe.length}</b> tomas · <b>${oz}</b> oz de tetero · <b>${bm}</b> min de pecho</p>
-    <h3>Lo que va aprendiendo</h3>
-    <p>${KEYS.map(k => `${LABELS[k].e} ${cnt[k]}`).join(' · ')}</p>
-    <p>Aciertos de la sugerencia: <b>${lab.length ? Math.round(hits / lab.length * 100) + '%' : '—'}</b> (${hits}/${lab.length})</p>
-    <p>Suele comer cada <b>${fmt(feedInterval())}</b> · aguanta despierta <b>~${fmt(wakeWindow())}</b></p>
-    <div class="row">
-      <button id="tourBtn">❓ Ver tutorial</button>
-      <button id="wxBtn">${lsGet(WX_LOC) ? '🌡️ Quitar clima de afuera' : '🌡️ Usar clima de afuera'}</button>
-      <button id="expBtn">⬇️ Descargar respaldo</button>
-      <label>⬆️ Restaurar<input type="file" id="impIn" accept="application/json" hidden></label>
-      <button id="wipeBtn" class="danger">Borrar todo</button>
+    <p class="mh">Seguimiento</p>
+    <div class="mlist">
+      ${row('menuLearn', '🧠', 'Lo que he aprendido', `Aciertos ${lab.length ? Math.round(hits / lab.length * 100) + ' %' : '—'} · come cada ~${fmt(feedInterval())} · despierta ~${fmt(wakeWindow())}`)}
+      ${row('menuDay', '📊', 'Resumen y cronograma del día', `Hoy: ${fe.length} tomas${bm ? ` · ${bm} min de pecho` : ''}${oz ? ` · ${oz} oz` : ''}`)}
+    </div>
+    <p class="mh">App</p>
+    <div class="mlist">
+      ${row('tourBtn', '❓', 'Ver tutorial')}
+      ${row('wxBtn', '🌡️', 'Clima de afuera', lsGet(WX_LOC) ? 'Activado · toca para quitarlo' : 'Desactivado · ayuda a sugerir frío o calor')}
+      ${row('expBtn', '⬇️', 'Descargar respaldo', 'Guarda una copia de todos los registros')}
+      ${row('impLbl', '⬆️', 'Restaurar respaldo', 'Desde un archivo descargado antes', '', 'label')}
+    </div>
+    <p class="mh">Cuidado</p>
+    <div class="mlist">
+      ${cloud ? row('leaveBtn', '🚪', 'Salir de la familia', 'En este celular') : ''}
+      ${row('wipeBtn', '🗑️', 'Borrar todo', cloud ? 'Borra los registros para todos' : 'Borra los registros de este celular', 'danger')}
     </div>
     <p class="note">El audio nunca se sube: solo se guardan números que describen el llanto.</p>
     <p class="note">Es una ayuda, no un diagnóstico. Llanto muy agudo, que no se calma con nada, fiebre, rechazo a comer o decaimiento: llama al pediatra.</p>`;
@@ -1264,8 +1367,10 @@ $('menuBtn').onclick = () => {
   requestAnimationFrame(() => m.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   if ($('leaveBtn')) $('leaveBtn').onclick = () => { lsSet('llanto.fam', null); location.href = location.pathname; };
   if ($('whoBtn')) $('whoBtn').onclick = () => { m.hidden = true; openWho(); };
+  $('menuLearn').onclick = () => { m.hidden = true; openLearn(); };
+  $('menuDay').onclick = () => { m.hidden = true; openDay(0); };
   if ($('notifBtn')) $('notifBtn').onclick = async () => {
-    const b = $('notifBtn');
+    const b = { set textContent(v) { const r = $('notifBtn'); r.querySelector('b').textContent = v.replace(/^\S+\s/, ''); r.querySelector('.ic').textContent = v.split(' ')[0]; } };
     if (lsGet('llanto.notif') === '1') {
       lsSet('llanto.notif', null); cloud.notifOff().catch(console.error);
       b.textContent = '🔔 Activar avisos'; toast('Avisos desactivados'); return;
@@ -1308,7 +1413,7 @@ $('menuBtn').onclick = () => {
     } catch (e) { toast('Ese archivo no es un respaldo válido'); }
   };
   $('wipeBtn').onclick = async () => {
-    if (!wipeArmed) { wipeArmed = true; $('wipeBtn').textContent = cloud ? 'Borra para TODOS · toca otra vez' : 'Toca otra vez para confirmar'; return; }
+    if (!wipeArmed) { wipeArmed = true; $('wipeBtn').querySelector('b').textContent = cloud ? 'Borra para TODOS · toca otra vez' : 'Toca otra vez para confirmar'; return; }
     if (cloud) { await cloud.bulk('events', D.events, true); await cloud.bulk('cries', D.cries, true); }
     else { D = { events: [], cries: [] }; saveLocal(); }
     render(); m.hidden = true; $('result').hidden = true; toast('Datos borrados');
@@ -1716,11 +1821,123 @@ function openWho() {
   tick = setInterval(draw, 30000);
 }
 
+/* ====== Pantalla: Lo que he aprendido de ella ====== */
+function learnData() {
+  const N = now(), H = 3600e3, nm = BABY && BABY.name ? BABY.name.split(' ')[0] : 'tu bebé';
+  const first = Math.min(...D.events.map(e => e.t), ...D.cries.map(c => c.t));
+  const days = isFinite(first) ? Math.max(1, (N - first) / DAY) : 0;
+  const perDay = (arr, a, b) => arr.filter(t => t >= a && t < b).length / Math.max(1, (b - Math.max(a, first)) / DAY);
+  const rDays = Math.min(3, days), r0 = N - rDays * DAY, b0 = Math.max(first, N - 10 * DAY);
+  const feedsT = D.events.filter(e => e.type === 'feed').map(e => e.t);
+  const fg = feedGaps(), wg = wakeGaps();
+  const recentMed = (g, d) => wmedian(g.filter(x => x.t >= N - d * DAY).map(x => ({ ...x, w: 1 })));
+  const oldMed = (g, d) => wmedian(g.filter(x => x.t < N - d * DAY).map(x => ({ ...x, w: 1 })));
+  const byBlock = g => BLOCKS.map(B => { const x = g.filter(o => blockOf(o.t) === B); return { B, n: x.length, v: x.length >= 3 ? wmedian(x) : null }; });
+  const breastMin = D.events.filter(e => e.type === 'feed' && e.mode === 'breast' && e.t >= r0).reduce((x, e) => x + (e.mins || (e.end ? (e.end - e.t) / 60000 : 0)), 0) / Math.max(1, rDays);
+  // siestas: sueños que no son parte de la noche
+  const naps = sleepSpans().filter(s => !s.on && s.a >= r0 && !tramoOf(s.a) && s.b - s.a >= 15 * 60000 && s.b - s.a <= 4 * H);
+  const cries = D.cries.map(c => c.t), lab = D.cries.filter(c => c.label && LABELS[c.label] && c.t > N - 14 * DAY);
+  const labCount = {}; lab.forEach(c => labCount[c.label] = (labCount[c.label] || 0) + 1);
+  const labBlock = BLOCKS.map(B => { const x = lab.filter(c => blockOf(c.t) === B), cnt = {}; x.forEach(c => cnt[c.label] = (cnt[c.label] || 0) + 1);
+    const top = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a])[0]; return { B, n: x.length, top, pct: top ? cnt[top] / x.length : 0 }; });
+  const poops = D.events.filter(e => e.type === 'diaper' && e.poop).map(e => e.t);
+  const bel = D.events.filter(e => e.type === 'belly').map(e => e.t), push = D.events.filter(e => e.type === 'push').map(e => e.t);
+  const peak = ts => { const c = BLOCKS.map(B => ({ B, n: ts.filter(t => t >= b0 && blockOf(t) === B).length })).sort((a, b) => b.n - a.n); return c[0].n >= 2 ? c[0].B : null; };
+  return { N, nm, days, rDays, r0, b0, first,
+    feeds: { now: feedInterval(), all: wmedian(fg), rec: recentMed(fg, 2), old: oldMed(fg, 2), blocks: byBlock(fg),
+      perDay: perDay(feedsT, r0, N), perDayOld: perDay(feedsT, b0, r0), breastMin },
+    wake: { all: wmedian(wg), rec: recentMed(wg, 2), old: oldMed(wg, 2), blocks: byBlock(wg) },
+    naps: { n: naps.length / Math.max(1, rDays), avg: naps.length ? naps.reduce((x, s) => x + s.b - s.a, 0) / naps.length : null },
+    night: nightStats(), bp: breastPattern(),
+    diaper: { int: diaperInt(), perDay: perDay(D.events.filter(e => e.type === 'diaper').map(e => e.t), r0, N), poops: perDay(poops, r0, N), lastPoop: poops.length ? Math.max(...poops) : null },
+    cry: { perDay: perDay(cries, r0, N), perDayOld: perDay(cries, b0, r0), labeled: D.cries.filter(c => c.label).length,
+      hits: (() => { const l = D.cries.filter(c => c.label && c.pred); return l.length ? Math.round(l.filter(c => topOf(c.pred.p) === c.label).length / l.length * 100) : null; })(), labCount, labN: lab.length, labBlock },
+    belly: { perDay: perDay(bel, r0, N), peak: peak(bel), n: bel.length }, push: { perDay: perDay(push, r0, N), peak: peak(push), n: push.length }
+  };
+}
+function learnHighlights(L) {
+  const out = [], d = (a, b) => a != null && b != null ? a - b : null;
+  const fd = d(L.feeds.rec, L.feeds.old);
+  if (fd != null && Math.abs(fd) >= 20) out.push(['🍼', fd > 0 ? `Está aguantando más entre tomas: ahora come cada <b>~${fmt(L.feeds.rec)}</b> (antes ~${fmt(L.feeds.old)}).` : `Está pidiendo más seguido: ahora come cada <b>~${fmt(L.feeds.rec)}</b> (antes ~${fmt(L.feeds.old)}).`]);
+  const wb = L.wake.blocks.filter(x => x.v != null && x.B.k !== 'madrugada');
+  if (wb.length >= 2) {
+    const mx = wb.reduce((a, b) => b.v > a.v ? b : a), mn = wb.reduce((a, b) => b.v < a.v ? b : a);
+    if (mx.v - mn.v >= 20) out.push([mx.B.e, `En la <b>${mx.B.n.toLowerCase()}</b> aguanta más despierta (<b>~${fmt(mx.v)}</b>) que en la ${mn.B.n.toLowerCase()} (~${fmt(mn.v)}).`]);
+  }
+  const wd = d(L.wake.rec, L.wake.old);
+  if (wd != null && Math.abs(wd) >= 15) out.push(['☀️', wd > 0 ? `Está aguantando más tiempo despierta que antes: <b>~${fmt(L.wake.rec)}</b> (antes ~${fmt(L.wake.old)}).` : `Se está cansando más rápido: aguanta despierta <b>~${fmt(L.wake.rec)}</b> (antes ~${fmt(L.wake.old)}).`]);
+  const bp = L.bp;
+  if (bp.sleepsWithout) out.push(['🤱', `Últimamente <b>se duerme sin el seno</b>${bp.R.wf != null && bp.R.wf >= 0.5 ? ' y <b>pide comer al despertar</b>' : ''}. Por eso, si llora con rato despierta y comió hace poco, ahora sugiero sueño antes que hambre.`]);
+  else if (bp.changed) out.push(['🤱', `Se está durmiendo menos en el seno que antes (${Math.round(bp.R.rate * 100)} % de las veces, antes ${Math.round(bp.B.rate * 100)} %).`]);
+  if (L.cry.perDayOld && L.days >= 4) { const r = L.cry.perDay / L.cry.perDayOld; if (r >= 1.3) out.push(['😢', `Está llorando más que su promedio (${fmt1(L.cry.perDay)} al día, antes ${fmt1(L.cry.perDayOld)}).`]); else if (r <= 0.7) out.push(['😊', `Está llorando menos que antes (${fmt1(L.cry.perDay)} al día, antes ${fmt1(L.cry.perDayOld)}).`]); }
+  if (L.night.full) out.push(['🌙', `En la noche duerme en total <b>~${dur(L.night.tot)}</b> y se despierta <b>${fmt1(L.night.wk)}</b> ${Math.round(L.night.wk) === 1 ? 'vez' : 'veces'} en promedio.`]);
+  if (L.push.peak) out.push(['😤', `Puja más en la <b>${L.push.peak.n.toLowerCase()}</b>.`]);
+  return out;
+}
+const fmt1 = x => String(Math.round(x * 10) / 10).replace('.', ',');
+function openLearn() {
+  const L = learnData(), sec = $('learn'), HL = learnHighlights(L);
+  const none = t => `<p class="lnone">${t}</p>`;
+  const blockBars = (rows, unit) => { const mx = Math.max(1, ...rows.map(r => r.v || 0));
+    return `<div class="lbars">${rows.map(r => `<div><span>${r.B.e} ${r.B.n}<small>${r.B.r}</small></span><i><u style="width:${r.v ? Math.max(6, r.v / mx * 100) : 0}%"></u></i><b>${r.v ? unit(r.v) : '—'}</b></div>`).join('')}</div>`; };
+  const kv = items => `<div class="lkv">${items.map(([v, k]) => `<div><b>${v}</b><small>${k}</small></div>`).join('')}</div>`;
+  const card = (e, t, body) => `<div class="lcard"><h3><span>${e}</span>${t}</h3>${body}</div>`;
+  const trend = (a, b) => a == null || b == null || Math.abs(a - b) < 15 ? '' : ` <em class="${a > b ? 'up' : 'dn'}">${a > b ? '▲' : '▼'} antes ~${fmt(b)}</em>`;
+  const labs = Object.keys(L.cry.labCount).sort((a, b) => L.cry.labCount[b] - L.cry.labCount[a]);
+  const w = Math.min(85, Math.round(L.cry.labeled / 40 * 100));
+  const lbBlocks = L.cry.labBlock.filter(x => x.n >= 3 && x.top);
+  sec.innerHTML = `<div class="wrap">
+    <div class="dnav"><h2 style="text-align:left;padding-left:4px">🧠 Lo que he aprendido de ${esc(L.nm)}</h2><button class="icon-btn" id="lClose" aria-label="Cerrar">✕</button></div>
+    <p class="lsub">${L.days ? `Con ${Math.max(1, Math.round(L.days))} ${Math.round(L.days) === 1 ? 'día' : 'días'} de registros. Los últimos días pesan más, así los cambios se notan rápido.` : 'Todavía no hay registros.'}</p>
+    ${L.days ? `
+    <div class="lcard lhl"><h3><span>✨</span>Lo más importante</h3>
+      ${HL.length ? `<ul>${HL.map(([e, t]) => `<li><span>${e}</span><p>${t}</p></li>`).join('')}</ul>` : none('Todavía no veo cambios ni patrones claros. Con unos días más de registros aparecen aquí.')}</div>
+
+    ${card('🍼', 'Comida', `
+      ${kv([[`~${fmt(L.feeds.now)}`, 'entre tomas a esta hora'], [fmt1(L.feeds.perDay), 'tomas al día'], ...(L.feeds.breastMin ? [[`${Math.round(L.feeds.breastMin)} min`, 'de pecho al día']] : [])])}
+      <p class="lline">Últimos 2 días: cada <b>~${L.feeds.rec ? fmt(L.feeds.rec) : '—'}</b>${trend(L.feeds.rec, L.feeds.old)}</p>
+      <h4>Cada cuánto come según la hora</h4>${blockBars(L.feeds.blocks, fmt)}`)}
+
+    ${card('☀️', 'Tiempo despierta', `
+      ${kv([[L.wake.all ? `~${fmt(L.wake.all)}` : '—', 'aguanta despierta'], [L.wake.rec ? `~${fmt(L.wake.rec)}` : '—', 'últimos 2 días']])}
+      <h4>Cuánto aguanta despierta según la hora</h4>${blockBars(L.wake.blocks, fmt)}
+      <p class="lnote">Con esto calculo cuándo le va a dar sueño. Si un momento del día tiene pocos datos, uso el promedio general.</p>`)}
+
+    ${card('😴', 'Sueño', `
+      ${kv([[L.naps.avg ? dur(L.naps.avg) : '—', 'dura una siesta'], [L.naps.n ? fmt1(L.naps.n) : '—', 'siestas al día'],
+        [L.night.n ? dur(L.night.stretch) : '—', 'primer tramo de la noche'], [L.night.full ? fmt1(L.night.wk) : '—', 'despertares por noche']])}
+      ${L.night.n ? `<p class="lline">Suele dormirse para la noche hacia las <b>${hhmm(L.night.start)}</b>${L.night.full ? ` y duerme en total <b>~${dur(L.night.tot)}</b> en la noche` : ''}.</p>` : ''}`)}
+
+    ${card('🤱', 'Seno y sueño', L.bp.R.n + L.bp.B.n < 3 ? none('Necesito más sueños registrados para ver esto.') : `
+      ${kv([[L.bp.R.rate != null ? `${Math.round(L.bp.R.rate * 100)} %` : '—', 'se duerme en el seno (últimos 2 días)'],
+        [L.bp.R.wf != null ? `${Math.round(L.bp.R.wf * 100)} %` : '—', 'come al despertar'],
+        [L.bp.R.refuses, 'rechazos del seno (2 días)'], [L.bp.B.rate != null ? `${Math.round(L.bp.B.rate * 100)} %` : '—', 'se dormía en el seno antes']])}
+      <p class="lline">${L.bp.sleepsWithout ? 'Ahora <b>se duerme sin el seno</b>: cuando llora con sueño, sugiero dormir antes que comer.' : 'Todavía la cuento como bebé que se duerme comiendo cuando tiene sueño.'}</p>`)}
+
+    ${card('🧷', 'Pañal', kv([[`~${fmt(L.diaper.int)}`, 'entre cambios'], [fmt1(L.diaper.perDay), 'pañales al día'], [fmt1(L.diaper.poops), 'con popó al día'],
+      [L.diaper.lastPoop ? fmt(mins(L.diaper.lastPoop)) : '—', 'desde la última popó']]))}
+
+    ${card('😢', 'Llantos', `
+      ${kv([[fmt1(L.cry.perDay), 'llantos al día'], [L.cry.hits != null ? `${L.cry.hits} %` : '—', 'acerté qué la calmó']])}
+      <div class="lprog"><i style="width:${w}%"></i></div>
+      <p class="lnote">${L.cry.labeled} llantos marcados. Lo aprendido de cómo suena su llanto pesa <b>${w} %</b>. Cada vez que marcas qué la calmó sube un poco (máximo 85 % con 40 llantos marcados).</p>
+      ${labs.length ? `<h4>Qué la ha calmado (últimas 2 semanas)</h4><div class="lbars">${labs.map(k => `<div><span>${LABELS[k].e} ${LABELS[k].s}</span><i><u style="width:${L.cry.labCount[k] / L.cry.labN * 100}%"></u></i><b>${Math.round(L.cry.labCount[k] / L.cry.labN * 100)} %</b></div>`).join('')}</div>` : ''}
+      ${lbBlocks.length ? `<h4>Lo más común según la hora</h4><div class="ltags">${lbBlocks.map(x => `<span>${x.B.e} ${x.B.n}: <b>${LABELS[x.top].e} ${LABELS[x.top].s}</b></span>`).join('')}</div>` : ''}`)}
+
+    ${L.belly.n || L.push.n ? card('🎈', 'Panza y pujos', kv([[fmt1(L.belly.perDay), 'panza durita al día'], [fmt1(L.push.perDay), 'pujos al día'],
+      [L.belly.peak ? `${L.belly.peak.e} ${L.belly.peak.n}` : '—', 'panza durita más seguido'], [L.push.peak ? `${L.push.peak.e} ${L.push.peak.n}` : '—', 'puja más seguido']])) : ''}
+    <p class="lnote" style="text-align:center;margin-top:18px">Todo se calcula en tu celular con los registros de la familia. Mientras más registran, mejor la conozco.</p>
+    ` : ''}
+  </div>`;
+  sec.hidden = false; sec.scrollTop = 0;
+  $('lClose').onclick = () => { sec.hidden = true; };
+}
+
 /* ====== Botón atrás del celular ======
    Cada ventana que se abre (resumen, hojas de abajo, menú) agrega un paso al historial,
    así el botón atrás la cierra en vez de salir de la app. */
 (() => {
-  const IDS = ['day', 'sheet', 'menu'], stack = [];
+  const IDS = ['day', 'learn', 'sheet', 'menu'], stack = [];
   let pushed = 0, busy = false;
   const sync = () => {
     if (busy) return;
@@ -1730,6 +1947,7 @@ function openWho() {
   const closeOv = id => {
     const el = $(id); if (!el || el.hidden) return;
     if (id === 'day' && $('dClose')) $('dClose').click();
+    else if (id === 'learn' && $('lClose')) $('lClose').click();
     else if (id === 'sheet') el.dispatchEvent(new MouseEvent('click', { bubbles: true }));   // cierra con su propia limpieza
     if (!el.hidden) { el.hidden = true; if (id === 'sheet') el.innerHTML = ''; }
   };
