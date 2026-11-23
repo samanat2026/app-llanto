@@ -1070,7 +1070,9 @@ function renderAge() {
   const b = $('ageBtn');
   if (BABY && BABY.birth) {
     const txt = ageTxt(BABY.birth);
-    b.innerHTML = `👶 ${BABY.name ? `<b>${esc(BABY.name)}</b> · ` : ''}${txt || 'aún no ha nacido'}`;
+    const [y, mo, d] = BABY.birth.split('-').map(Number), t = new Date();
+    const total = Math.round((new Date(t.getFullYear(), t.getMonth(), t.getDate()) - new Date(y, mo - 1, d)) / 864e5);
+    b.innerHTML = `👶 ${BABY.name ? `<b>${esc(BABY.name)}</b> · ` : ''}${txt || 'aún no ha nacido'}${txt && total > 0 ? ` · <b>${total} ${total === 1 ? 'día' : 'días'}</b>` : ''}`;
     b.hidden = false;
   } else { b.innerHTML = '👶 Toca para poner la fecha de nacimiento'; b.hidden = !canEditBaby(); }
 }
