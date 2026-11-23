@@ -1697,6 +1697,40 @@ function openWho() {
   tick = setInterval(draw, 30000);
 }
 
+/* ====== Botón atrás del celular ======
+   Cada ventana que se abre (resumen, hojas de abajo, menú) agrega un paso al historial,
+   así el botón atrás la cierra en vez de salir de la app. */
+(() => {
+  const IDS = ['day', 'sheet', 'menu'], stack = [];
+  let pushed = 0, busy = false;
+  const sync = () => {
+    if (busy) return;
+    if (pushed < stack.length) { history.pushState({ ov: stack.length }, ''); pushed++; sync(); }
+    else if (pushed > stack.length) { busy = true; pushed--; history.back(); }
+  };
+  const closeOv = id => {
+    const el = $(id); if (!el || el.hidden) return;
+    if (id === 'day' && $('dClose')) $('dClose').click();
+    else if (id === 'sheet') el.dispatchEvent(new MouseEvent('click', { bubbles: true }));   // cierra con su propia limpieza
+    if (!el.hidden) { el.hidden = true; if (id === 'sheet') el.innerHTML = ''; }
+  };
+  new MutationObserver(() => {
+    for (const id of IDS) {
+      const vis = !$(id).hidden, i = stack.indexOf(id);
+      if (vis && i < 0) stack.push(id);
+      if (!vis && i >= 0) stack.splice(i, 1);
+    }
+    sync();
+  }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (busy) { busy = false; sync(); return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = stack[stack.length - 1];
+    if (top) { stack.pop(); closeOv(top); }
+    sync();
+  });
+})();
+
 /* ====== Arranque ====== */
 function genCode() {
   const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', r = new Uint32Array(12);
