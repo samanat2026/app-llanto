@@ -144,6 +144,11 @@ function computeStats(events, now = Date.now()) {
   for (let i = 1; i < fts.length; i++) { const x = (fts[i] - fts[i - 1]) / 60000; if (x >= 30 && x <= 360) fg.push(x); }
   const feedInt = median(fg.slice(-15)) || 180;
 
+  // cada cuánto le cambian el pañal normalmente (mientras no haya 5 intervalos, 3 h)
+  const dts = ev.filter(e => e.type === 'diaper').map(e => e.t), dg = [];
+  for (let i = 1; i < dts.length; i++) { const x = (dts[i] - dts[i - 1]) / 60000; if (x >= 45 && x <= 480) dg.push(x); }
+  const diaperInt = dg.length >= 5 ? Math.max(90, Math.min(360, median(dg.slice(-15)))) : 180;
+
   const sw = ev.filter(e => e.type === 'sleep' || e.type === 'wake'), wg = [];
   for (let i = 1; i < sw.length; i++)
     if (sw[i - 1].type === 'wake' && sw[i].type === 'sleep') { const x = (sw[i].t - sw[i - 1].t) / 60000; if (x >= 20 && x <= 240) wg.push(x); }
@@ -163,7 +168,7 @@ function computeStats(events, now = Date.now()) {
   }
   const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
   const n7 = nights.slice(-7), n10 = naps.slice(-10);
-  return { feedInt, wakeWin, nightAvg: avg(n7), nightN: n7.length, napAvg: avg(n10), napN: n10.length, at: now };
+  return { feedInt, wakeWin, diaperInt, nightAvg: avg(n7), nightN: n7.length, napAvg: avg(n10), napN: n10.length, at: now };
 }
 
 // Avisos con los registros de las últimas 24 h + los promedios guardados
@@ -181,9 +186,10 @@ function computeAlerts(events, S, notified = {}, now = Date.now()) {
     out.push({ k: 'feed', id: lf.id, title: '🍼 Ya le va tocando comer',
       body: `Comió hace ${fmt(mins(lf.t))} (${hhmm(lf.t)}). Suele comer cada ~${fmt(feedInt)}.${asleep ? ' Ahora está dormida.' : ''}` });
 
-  if (ld && !asleep && mins(ld.t) >= 150 && mins(ld.t) < 10 * 60 && notified.diaper !== ld.id)
+  const dInt = S.diaperInt || 180;
+  if (ld && !asleep && mins(ld.t) >= dInt && mins(ld.t) < 10 * 60 && notified.diaper !== ld.id)
     out.push({ k: 'diaper', id: ld.id, title: '🧷 Revisa el pañal',
-      body: `El último cambio fue hace ${fmt(mins(ld.t))} (${hhmm(ld.t)}).` });
+      body: `El último cambio fue hace ${fmt(mins(ld.t))} (${hhmm(ld.t)}). Suelen cambiarla cada ~${fmt(dInt)}.` });
 
   if (lsw && !asleep && mins(lsw.t) >= wakeWin && mins(lsw.t) < wakeWin * 3 && notified.awake !== lsw.id)
     out.push({ k: 'awake', id: lsw.id, title: `😴 Lleva ${fmt(mins(lsw.t))} despierta`,

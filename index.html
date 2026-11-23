@@ -429,13 +429,23 @@ function getCtx() {
 }
 
 /* ====== Predicción ====== */
+/* Cada cuánto le cambian el pañal normalmente: mediana de los últimos 15 intervalos (de 45 min a 8 h).
+   Mientras no haya suficientes registros, 3 h. */
+function diaperInt() {
+  const ts = D.events.filter(e => e.type === 'diaper').map(e => e.t).sort((a, b) => a - b), g = [];
+  for (let i = 1; i < ts.length; i++) { const x = (ts[i] - ts[i - 1]) / 60000; if (x >= 45 && x <= 480) g.push(x); }
+  const r = g.slice(-15).sort((a, b) => a - b);
+  if (r.length < 5) return 180;
+  const m = r.length >> 1, med = r.length % 2 ? r[m] : (r[m - 1] + r[m]) / 2;
+  return Math.max(90, Math.min(360, med));
+}
 const sig = (x, mid, w) => 1 / (1 + Math.exp(-(x - mid) / w));
 function normP(s) { const t = KEYS.reduce((a, k) => a + s[k], 0) || 1, o = {}; KEYS.forEach(k => o[k] = s[k] / t); return o; }
 function prior(c) {
   return normP({
     hambre: c.sinceFeed == null ? 0.35 : 0.05 + 0.9 * sig(c.sinceFeed, c.feedInt * 0.85, 15),
     sueno:  c.awake == null ? 0.3 : 0.05 + 0.85 * sig(c.awake, c.wakeWin * 0.9, 12),
-    panal:  c.sinceDiaper == null ? 0.3 : 0.05 + 0.7 * sig(c.sinceDiaper, 150, 25),
+    panal:  c.sinceDiaper == null ? 0.3 : 0.05 + 0.7 * sig(c.sinceDiaper, diaperInt(), diaperInt() / 6),
     ...tempPrior(c),
     colico: colicPrior(c),
     otro: 0.12
@@ -617,7 +627,7 @@ const esc = s => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 function why(k, c) {
   if (k === 'hambre') return c.sinceFeed == null ? 'Aún no hay tomas registradas' : `Comió hace ${fmt(c.sinceFeed)} · suele comer cada ${fmt(c.feedInt)}`;
   if (k === 'sueno') return c.awake == null ? 'Aún no hay sueño registrado' : (c.awake === 0 ? 'Estaba dormida' : `Lleva ${fmt(c.awake)} despierta · aguanta ~${fmt(c.wakeWin)}`);
-  if (k === 'panal') return c.sinceDiaper == null ? 'Aún no hay pañales registrados' : `Último pañal hace ${fmt(c.sinceDiaper)}`;
+  if (k === 'panal') return c.sinceDiaper == null ? 'Aún no hay pañales registrados' : `Último pañal hace ${fmt(c.sinceDiaper)} · suelen cambiarla cada ~${fmt(diaperInt())}`;
   if (k === 'colico') {
     const r = [];
     if (c.sincePush != null && c.sincePush <= 60) r.push(`pujó hace ${fmt(c.sincePush)}`);
@@ -649,7 +659,7 @@ function render() {
     chip('🍼 desde que comió', c.sinceFeed, c.sinceFeed != null && c.sinceFeed > c.feedInt * 0.85, lf, feedDetail(lf)) +
     (asleep() ? `<div class="chip"><b>Dormida</b><small>😴 ${fmt(mins(ls.t))}</small>${by(ls)}</div>`
               : chip('☀️ despierta', c.awake, c.awake != null && c.awake > c.wakeWin * 0.9, last('wake'))) +
-    chip('🧷 desde el pañal', c.sinceDiaper, c.sinceDiaper != null && c.sinceDiaper > 150, last('diaper'), c.sincePoop != null ? `💩 hace ${fmt(c.sincePoop)}` : '');
+    chip('🧷 desde el pañal', c.sinceDiaper, c.sinceDiaper != null && c.sinceDiaper > diaperInt(), last('diaper'), c.sincePoop != null ? `💩 hace ${fmt(c.sincePoop)}` : '');
   const sb = $('sleepBtn'), sl = asleep();
   sb.innerHTML = sl ? '☀️<span>Se despertó</span>' : '😴<span>Se durmió</span>';
   sb.classList.toggle('on', sl);
