@@ -1,4 +1,4 @@
-const CACHE = 'llanto-v20';
+const CACHE = 'llanto-v21';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon.svg', './firebase-config.js'];
 
 self.addEventListener('install', e => {
@@ -22,4 +22,22 @@ self.addEventListener('fetch', e => {
       .then(r => { if (r.ok) { const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); } return r; })
       .catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('./index.html')))
   );
+});
+
+// Avisos (notificaciones push de Firebase para la administradora)
+self.addEventListener('push', e => {
+  let p = {};
+  try { p = e.data ? e.data.json() : {}; } catch (err) { p = { data: { body: e.data && e.data.text() } }; }
+  const d = p.data || p.notification || p;
+  e.waitUntil(self.registration.showNotification(d.title || '¿Qué tiene?', {
+    body: d.body || '', tag: d.tag || 'aviso', renotify: true,
+    icon: 'icon.svg', badge: 'icon.svg', data: { url: './' }
+  }));
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    const w = list.find(c => c.url.includes(self.registration.scope));
+    return w ? w.focus() : clients.openWindow('./');
+  }));
 });

@@ -253,6 +253,7 @@ const OLD = { temp: { t: 'Frío / calor', s: 'Temp.', e: '🌡️' } };     // e
 const Lb = k => LABELS[k] || OLD[k] || { t: k, s: k, e: '•' };
 const REC_SECONDS = 6;
 const FB_VERSION = '10.12.2';
+const VAPID = window.FIREBASE_VAPID || '';
 const CFG = window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey ? window.FIREBASE_CONFIG : null;
 
 const $ = id => document.getElementById(id);
@@ -323,7 +324,12 @@ async function initCloud(code) {
   window.addEventListener('pagehide', () => ping(false));
   // Quién es la administradora (la mamá)
   const watchFam = (tries = 0) => F.onSnapshot(famDoc,
-    snap => { cloud.owner = snap.exists() ? snap.data().owner : null; },
+    snap => {
+      cloud.owner = snap.exists() ? snap.data().owner : null;
+      if (cloud.owner === MY && lsGet('llanto.notif') === '1' && 'Notification' in window && Notification.permission === 'granted' && !cloud._tkDone) {
+        cloud._tkDone = true; cloud.notifToken().catch(console.error);
+      }
+    },
     err => { console.error(err); if (tries < 5) setTimeout(() => watchFam(tries + 1), 4000); });
   watchFam();
   // Nombre y fecha de nacimiento de la bebé (documento fijo, t:0 para que no entre en la lista de eventos)
@@ -332,6 +338,17 @@ async function initCloud(code) {
     err => { console.error(err); if (tries < 5) setTimeout(() => watchBaby(tries + 1), 4000); });
   watchBaby();
   cloud.claim = () => F.setDoc(famDoc, { owner: MY, t: now() });
+  // Notificaciones (solo la administradora): guarda el token de este celular en su registro
+  cloud.notifToken = async () => {
+    const M = await import(base + 'firebase-messaging.js');
+    if (!(await M.isSupported())) throw new Error('unsupported');
+    const reg = await navigator.serviceWorker.ready;
+    const tk = await M.getToken(M.getMessaging(app), { vapidKey: VAPID, serviceWorkerRegistration: reg });
+    if (!tk) throw new Error('no-token');
+    await F.setDoc(myDoc, { fcm: tk, notif: true }, { merge: true });
+    return tk;
+  };
+  cloud.notifOff = () => F.setDoc(myDoc, { notif: false }, { merge: true });
   cloud.watchMembers = (cb, onErr) => F.onSnapshot(F.collection(db, 'families', code, 'members'),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))), onErr);
   const since = now() - 120 * 864e5;
@@ -1104,7 +1121,9 @@ $('menuBtn').onclick = () => {
       <a href="https://wa.me/?text=${encodeURIComponent('Únete a la app de llantos de la bebé (ábrelo en el celular y agrégalo a la pantalla de inicio): ' + link)}" target="_blank" rel="noopener">📲 Invitar por WhatsApp</a>
       <button id="leaveBtn">Salir de la familia</button>
     </div>
-    ${cloud.owner && cloud.owner === cloud.uid ? `<div class="row"><button id="whoBtn">🟢 Quién está en línea</button></div>` : ''}
+    ${cloud.owner && cloud.owner === cloud.uid ? `<div class="row"><button id="whoBtn">🟢 Quién está en línea</button>
+      ${VAPID ? `<button id="notifBtn">${lsGet('llanto.notif') === '1' ? '🔕 Desactivar avisos' : '🔔 Activar avisos'}</button>` : ''}</div>
+      ${VAPID ? `<p class="note">Avisos solo para ti: cuando le toque comer, revisar el pañal, lleve mucho despierta o esté por despertar.</p>` : ''}` : ''}
     ${cloud.owner === null ? `<div class="row"><button id="claimBtn">👑 Soy la mamá: activar mis opciones</button></div>
       <p class="note">Solo debe tocarlo la mamá. La primera persona que lo toque queda como administradora y nadie más lo verá.</p>` : ''}` :
     `<p class="note">Modo solo este celular. Para compartir con otros cuidadores, configura <b>firebase-config.js</b>.</p>`;
@@ -1128,6 +1147,25 @@ $('menuBtn').onclick = () => {
   requestAnimationFrame(() => m.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   if ($('leaveBtn')) $('leaveBtn').onclick = () => { lsSet('llanto.fam', null); location.href = location.pathname; };
   if ($('whoBtn')) $('whoBtn').onclick = () => { m.hidden = true; openWho(); };
+  if ($('notifBtn')) $('notifBtn').onclick = async () => {
+    const b = $('notifBtn');
+    if (lsGet('llanto.notif') === '1') {
+      lsSet('llanto.notif', null); cloud.notifOff().catch(console.error);
+      b.textContent = '🔔 Activar avisos'; toast('Avisos desactivados'); return;
+    }
+    if (!('Notification' in window)) { toast('Este navegador no permite notificaciones'); return; }
+    b.textContent = '⏳ Activando…';
+    try {
+      if ((await Notification.requestPermission()) !== 'granted') throw new Error('denied');
+      await cloud.notifToken();
+      lsSet('llanto.notif', '1'); b.textContent = '🔕 Desactivar avisos';
+      toast('Avisos activados ✓ Te llegarán aunque la app esté cerrada');
+    } catch (e) {
+      console.error(e); b.textContent = '🔔 Activar avisos';
+      toast(e.message === 'denied' ? 'Diste "No permitir". Actívalo en Ajustes del celular → Notificaciones → Chrome.'
+        : e.message === 'unsupported' ? 'Este navegador no permite notificaciones. Usa Chrome.' : 'No pude activarlos. Revisa internet e inténtalo otra vez.');
+    }
+  };
   if ($('claimBtn')) $('claimBtn').onclick = async () => {
     try { await cloud.claim(); cloud.owner = cloud.uid; m.hidden = true; toast('Listo 👑 Ahora en el menú ves quién está en línea'); }
     catch (e) { console.error(e); toast('No se pudo. ¿Ya hay otra administradora o falta publicar las reglas nuevas?'); }
