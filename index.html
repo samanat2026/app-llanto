@@ -82,6 +82,16 @@
   .motto{font-size:13.5px;line-height:1.4;color:#d9cfe6;font-style:italic;margin:4px 0 2px;cursor:pointer;transition:opacity .25s}
   .motto.hard{color:#ffc3dc}
   input[type=date]{width:100%;font:inherit;font-size:17px;padding:14px;border-radius:14px;border:1px solid #ffffff22;background:var(--card2);color:var(--tx);margin:6px 0 10px;color-scheme:dark}
+  .spurt{background:linear-gradient(160deg,#1f3a2c,#1c2620);border:1px solid #5fd39a66;border-radius:18px;padding:14px;margin:-6px 0 16px}
+  .spurt .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .spurt .top b{font-size:16px}
+  .spurt .top button{background:none;color:var(--mut);font-size:13px;padding:4px 6px;min-height:0}
+  .spurt .sig{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+  .spurt .sig div{background:#ffffff0d;border-radius:12px;padding:8px;text-align:center}
+  .spurt .sig b{display:block;font-size:17px}
+  .spurt .sig small{color:var(--mut);font-size:11.5px}
+  .spurt .sig .up b{color:#7ee0ad}
+  .spurt p{font-size:13.5px;line-height:1.45;margin:6px 0 0;color:#d6e8dc}
   .scard{background:linear-gradient(160deg,#2b2750,#1f1c2b);border:1px solid #7b6cf655;border-radius:18px;padding:14px;margin:-6px 0 16px}
   .scard .top{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
   .scard .top b{font-size:17px}
@@ -216,6 +226,7 @@
     <div id="feedBanner"></div>
     <section class="status" id="status"></section>
     <section id="sleepCard"></section>
+    <section id="spurt"></section>
 
     <button class="cry" id="cryBtn">
       <span id="cryTxt">Está llorando</span>
@@ -634,7 +645,7 @@ function render() {
   sb.classList.toggle('on', sl);
   renderBanner();
   renderPending();
-  renderWxAsk(); showWx(); renderAge(); renderMotto(); renderSleepCard();
+  renderWxAsk(); showWx(); renderAge(); renderMotto(); renderSleepCard(); renderSpurt();
 }
 
 /* ====== Tomas: pecho (cronómetro y lado) o tetero (onzas) ====== */
@@ -1354,6 +1365,64 @@ function renderMotto() {
   el.className = 'motto' + (kind === 'dia' ? '' : ' hard');
 }
 $('motto').onclick = () => { mottoBump++; const el = $('motto'); el.style.opacity = 0; setTimeout(() => { renderMotto(); el.style.opacity = 1; }, 200); };
+/* ====== Posible estirón ======
+   Compara las últimas 24 h con su promedio de los 7 días anteriores (tomas, llanto, sueño).
+   Si come bastante más de lo normal (y además llora o duerme más), avisa que puede ser un estirón. */
+const SPURT_AGES = [[14, 21, '2–3 semanas'], [42, 42, '6 semanas'], [91, 91, '3 meses'], [182, 182, '6 meses']];
+function babyDays() {
+  if (!BABY || !BABY.birth) return null;
+  const [y, mo, d] = BABY.birth.split('-').map(Number), t = new Date();
+  return Math.round((new Date(t.getFullYear(), t.getMonth(), t.getDate()) - new Date(y, mo - 1, d)) / 864e5);
+}
+function spurtAge() {
+  const n = babyDays(); if (n == null) return null;
+  const w = SPURT_AGES.find(([a, b]) => n >= a - 7 && n <= b + 7);
+  return w ? w[2] : null;
+}
+function winStats(a, b) {
+  const feeds = D.events.filter(e => e.type === 'feed' && e.t >= a && e.t < b);
+  const breast = feeds.reduce((x, e) => x + (e.mode === 'breast' ? (e.mins || (e.end ? (e.end - e.t) / 60000 : 0)) : 0), 0);
+  const cries = D.cries.filter(c => c.t >= a && c.t < b).length;
+  const sleep = sleepSpans().reduce((x, s) => x + Math.max(0, Math.min(s.b, b) - Math.max(s.a, a)), 0);
+  return { feeds: feeds.length, breast, cries, sleep };
+}
+function spurtCheck() {
+  const N = now(), H = 3600e3, cur = winStats(N - 24 * H, N), prev = winStats(N - 48 * H, N - 24 * H);
+  const firstFeed = Math.min(...D.events.filter(e => e.type === 'feed').map(e => e.t));
+  const days = Math.min(7, Math.floor((N - 24 * H - firstFeed) / (24 * H)));
+  if (!isFinite(firstFeed) || days < 3) return null;                       // aún no conoce su promedio
+  const B = { feeds: 0, breast: 0, cries: 0, sleep: 0 };
+  for (let k = 1; k <= days; k++) { const w = winStats(N - (k + 1) * 24 * H, N - k * 24 * H); for (const x in B) B[x] += w[x] / days; }
+  const more = (v, base, r, min) => v >= base * r && v - base >= min;
+  const fed = more(cur.feeds, B.feeds, 1.25, 2) || (B.breast > 30 && more(cur.breast, B.breast, 1.3, 30));
+  if (!fed) return null;
+  const cried = more(cur.cries, B.cries, 1.3, 2), slept = more(cur.sleep, B.sleep, 1.1, 60 * 60000);
+  const age = spurtAge();
+  if (!cried && !slept && !age) return null;                              // solo comer más no basta
+  const prevFed = more(prev.feeds, B.feeds, 1.25, 2) || (B.breast > 30 && more(prev.breast, B.breast, 1.3, 30));
+  return { cur, B, cried, slept, age, d2: prevFed };
+}
+function renderSpurt() {
+  const el = $('spurt'); if (!el) return;
+  const S = spurtCheck(), today = new Date().toDateString();
+  if (!S || lsGet('llanto.spurtHide') === today) { el.innerHTML = ''; return; }
+  const name = BABY && BABY.name ? BABY.name.split(' ')[0] : 'Tu bebé';
+  const r = x => Math.round(x);
+  const box = (v, base, lab, up) => `<div class="${up ? 'up' : ''}"><b>${v}</b><small>${lab}<br>promedio ${base}</small></div>`;
+  el.innerHTML = `<div class="spurt">
+    <div class="top"><b>🌱 Posible estirón${S.d2 ? ' · día 2' : ''}</b><button id="spurtHide">Ocultar hoy</button></div>
+    <div class="sig">
+      ${box(S.cur.feeds, String(r(S.B.feeds * 10) / 10).replace('.', ','), '🍼 tomas en 24 h', true)}
+      ${S.B.breast > 30 ? box(`${r(S.cur.breast)} min`, `${r(S.B.breast)} min`, '🤱 de pecho', S.cur.breast > S.B.breast * 1.2) : ''}
+      ${box(S.cur.cries, String(r(S.B.cries * 10) / 10).replace('.', ','), '😢 llantos', S.cried)}
+      ${box(dur(S.cur.sleep), dur(S.B.sleep), '😴 dormida', S.slept)}
+    </div>
+    <p>${name} está pidiendo bastante más de lo normal${S.cried ? ' y está más llorona' : ''}${S.slept ? ' y está durmiendo más' : ''}.${S.age ? ` Además está cerca de los <b>${S.age}</b>, una edad típica de estirón.` : ''}</p>
+    <p>Suele durar <b>1 a 3 días</b>. Dale pecho a demanda aunque sea muy seguido: así tu cuerpo produce más leche. Después vuelve a su ritmo.</p>
+    <p style="color:var(--mut);font-size:12px">Es una señal, no un diagnóstico. Si tiene fiebre, no moja pañales o la ves decaída, consulta al pediatra.</p>
+  </div>`;
+  $('spurtHide').onclick = () => { lsSet('llanto.spurtHide', today); renderSpurt(); };
+}
 function renderAge() {
   const b = $('ageBtn');
   if (BABY && BABY.birth) {
