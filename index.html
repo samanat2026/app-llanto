@@ -134,7 +134,8 @@
   .bgrid .stop{background:var(--ok);color:#111;font-weight:600}
   .resume{width:100%;background:#2d2a40;border:1px solid var(--ok);border-radius:16px;padding:14px;font-size:16px;margin-bottom:12px;text-align:left}
   .resume small{display:block;color:var(--mut);font-size:12px;margin-top:2px}
-  .bellybtn{width:100%;margin-top:10px;background:var(--card);border-radius:16px;padding:11px;font-size:14.5px;color:var(--tx)}
+  .bellyrow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+  .bellybtn{width:100%;background:var(--card);border-radius:16px;padding:11px;font-size:14.5px;color:var(--tx)}
   .bellybtn:active{background:var(--card2)}
   .daybtn{width:100%;margin-top:12px;background:var(--card);border-radius:16px;padding:15px;font-size:15px}
   #day{position:fixed;inset:0;background:var(--bg);z-index:7;overflow:auto}
@@ -244,7 +245,7 @@
       <button id="sleepBtn">😴<span>Se durmió</span></button>
       <button data-ev="diaper">🧷<span>Pañal</span></button>
     </section>
-    <button class="bellybtn" id="bellyBtn">🎈 Panza durita</button>
+    <div class="bellyrow"><button class="bellybtn" id="bellyBtn">🎈 Panza durita</button><button class="bellybtn" id="pushBtn">😤 Pujó</button></div>
 
     <button class="daybtn" id="dayBtn">📊 Resumen y cronograma del día</button>
     <section id="wxAsk"></section>
@@ -419,6 +420,7 @@ function getCtx() {
     awake: sw ? (sw.type === 'wake' ? mins(sw.t) : 0) : null,
     sinceDiaper: dp ? mins(dp.t) : null,
     sinceBelly: (() => { const b = last('belly'); return b ? mins(b.t) : null; })(),
+    sincePush: (() => { const b = last('push'); return b ? mins(b.t) : null; })(),
     sincePoop: (() => { const pp = D.events.filter(e => e.type === 'diaper' && e.poop).sort((a, b) => b.t - a.t)[0]; return pp ? mins(pp.t) : null; })(),
     hour: d.getHours() + d.getMinutes() / 60,
     feedInt: feedInterval(), wakeWin: wakeWindow(),
@@ -453,6 +455,7 @@ function colicPrior(c) {
   if (c.hour >= 17 && c.hour < 23) p += 0.06;
   if (c.sinceFeed != null && c.sinceFeed >= 10 && c.sinceFeed <= 75) p += 0.06;
   if (c.sinceBelly != null && c.sinceBelly <= 120) p += 0.10;              // le sintieron la panza durita hace poco
+  if (c.sincePush != null && c.sincePush <= 60) p += 0.10;                 // está pujando (gases / disquecia)
   if (c.sincePoop != null) p += 0.12 * sig(c.sincePoop, 24 * 60, 120);
   return p;
 }
@@ -617,6 +620,7 @@ function why(k, c) {
   if (k === 'panal') return c.sinceDiaper == null ? 'Aún no hay pañales registrados' : `Último pañal hace ${fmt(c.sinceDiaper)}`;
   if (k === 'colico') {
     const r = [];
+    if (c.sincePush != null && c.sincePush <= 60) r.push(`pujó hace ${fmt(c.sincePush)}`);
     if (c.sinceBelly != null && c.sinceBelly <= 120) r.push(`panza durita hace ${fmt(c.sinceBelly)}`);
     if (c.sinceFeed != null && c.sinceFeed >= 10 && c.sinceFeed <= 75) r.push(`comió hace ${fmt(c.sinceFeed)}`);
     if (c.sincePoop != null) r.push(`última popó hace ${fmt(c.sincePoop)}`);
@@ -912,6 +916,7 @@ function logDiaper() {
   ]);
 }
 $('bellyBtn').onclick = () => quickLog('belly', '🎈 Panza durita');
+$('pushBtn').onclick = () => quickLog('push', '😤 Pujó');
 $('sleepBtn').onclick = () => asleep() ? quickLog('wake', '☀️ Se despertó') : quickLog('sleep', '😴 Se durmió');
 
 /* ====== Toast ====== */
@@ -978,6 +983,7 @@ function buildDay(off) {
   const diapers = D.events.filter(e => e.type === 'diaper' && inDay(e)).sort((a, b) => a.t - b.t);
   const cries = D.cries.filter(inDay).sort((a, b) => a.t - b.t);
   const bellies = D.events.filter(e => e.type === 'belly' && inDay(e)).sort((a, b) => a.t - b.t);
+  const pushes = D.events.filter(e => e.type === 'push' && inDay(e)).sort((a, b) => a.t - b.t);
   const sleeps = sleepIntervals(d0, d1), awakes = awakeIntervals(d0, d1, sleeps);
   const breastMin = feeds.filter(f => f.mode === 'breast').reduce((a, f) => a + (f.mins || Math.round(activeMs(f) / 60000)), 0);
   const oz = feeds.filter(f => f.mode === 'bottle').reduce((a, f) => a + (+f.oz || 0), 0);
@@ -994,11 +1000,12 @@ function buildDay(off) {
   });
   diapers.forEach(e => items.push({ k: 'dp', id: e.id, poop: !!e.poop, a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: `🧷 Cambio de pañal${e.poop ? ' · 💩 popó' : ''}`, by: who(e) }));
   bellies.forEach(e => items.push({ k: 'bl', a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: '🎈 Panza durita', by: who(e) }));
+  pushes.forEach(e => items.push({ k: 'pu', a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: '😤 Pujó', by: who(e) }));
   cries.forEach(c => items.push({ k: 'cr', a: c.t, b: c.t, t: c.t, h: hhmm(c.t), x: `😢 Lloró${c.label ? ` → la calmó: ${Lb(c.label).e} ${Lb(c.label).t}` : ` · sugerí ${Lb(topOf(c.pred.p)).e} (sin marcar)`}`, by: who(c) }));
   sleeps.forEach(s => items.push({ k: 'sl', a: s.ca, b: s.cb, t: s.ca, h: `${s.a < d0 ? 'ayer ' + hhmm(s.a) : hhmm(s.ca)}–${s.on && s.cb >= now() - 1000 ? 'ahora' : hhmm(s.cb)}`, x: tramoOf(s.a) ? `🌙 Noche · tramo ${tramoOf(s.a).i} · ${dur(s.cb - s.ca)}${cycleCount(s.cb - s.ca, new Date(s.a)) ? ` · ${cycleCount(s.cb - s.ca, new Date(s.a))}` : ''}${s.on ? ' · sigue dormida' : ''}` : `😴 Durmió ${dur(s.cb - s.ca)}${cycleCount(s.cb - s.ca, new Date(s.a)) ? ` · ${cycleCount(s.cb - s.ca, new Date(s.a))}` : ''}${s.on ? ' · sigue dormida' : ''}`, by: who(s) }));
   awakes.forEach(s => items.push({ k: 'aw', a: s.ca, b: s.cb, t: s.ca, h: `${hhmm(s.ca)}–${s.on ? 'ahora' : hhmm(s.cb)}`, x: `☀️ Despierta ${dur(s.cb - s.ca)}`, by: '' }));
   items.sort((a, b) => b.t - a.t);            // del más reciente al más temprano
-  return { d0, d1, feeds, diapers, cries, bellies, sleeps, awakes, breastMin, oz, sleepMs, awakeMs, items };
+  return { d0, d1, feeds, diapers, cries, bellies, pushes, sleeps, awakes, breastMin, oz, sleepMs, awakeMs, items };
 }
 /* Corregir un pañal ya registrado: marcar/quitar popó o eliminarlo */
 const dpActs = it => it.k !== 'dp' ? '' : `<span class="dpa">
@@ -1094,7 +1101,7 @@ function dayText(R, off) {
     `Resumen de la bebé · ${dayTitle(off, R.d0)}`,
     `🍼 ${R.feeds.length} tomas · pecho ${R.breastMin} min · tetero ${R.oz} oz`,
     `😴 Durmió ${dur(R.sleepMs)} · ☀️ despierta ${dur(R.awakeMs)}`,
-    `🧷 ${R.diapers.length} pañales (💩 ${R.diapers.filter(e => e.poop).length} con popó) · 😢 ${R.cries.length} llantos${R.bellies.length ? ` · 🎈 ${R.bellies.length} panza durita` : ''}`,
+    `🧷 ${R.diapers.length} pañales (💩 ${R.diapers.filter(e => e.poop).length} con popó) · 😢 ${R.cries.length} llantos${R.bellies.length ? ` · 🎈 ${R.bellies.length} panza durita` : ''}${R.pushes.length ? ` · 😤 ${R.pushes.length} ${R.pushes.length === 1 ? 'pujo' : 'pujos'}` : ''}`,
     '', '— Cronograma —',
     ...R.items.map(i => `${i.h}  ${i.x}${i.by ? ' · ' + i.by : ''}`)
   ].join('\n');
@@ -1105,8 +1112,8 @@ function openDay(off = 0) {
   const pos = t => ((t - R.d0) / span * 100).toFixed(2) + '%';
   const wid = (a, b) => Math.max(0.4, (b - a) / span * 100).toFixed(2) + '%';
   const nowIn = now() >= R.d0 && now() < R.d1;
-  const LANES = { sueno: ['aw', 'sl'], tomas: ['fb', 'fo'], marcas: ['dp', 'cr', 'bl'] };
-  const MK = { dp: '🧷', cr: '😢', bl: '🎈' };
+  const LANES = { sueno: ['aw', 'sl'], tomas: ['fb', 'fo'], marcas: ['dp', 'cr', 'bl', 'pu'] };
+  const MK = { dp: '🧷', cr: '😢', bl: '🎈', pu: '😤' };
   const laneEls = ks => R.items.map((it, i) => !ks.includes(it.k) ? ''
     : MK[it.k] ? `<em class="mk" data-i="${i}" style="left:${pos(it.a)}">${MK[it.k]}</em>`
     : `<i class="${it.k}" data-i="${i}" style="left:${pos(it.a)};width:${it.k === 'fo' ? '0.8%' : wid(it.a, it.b)}"></i>`).join('');
@@ -1133,7 +1140,7 @@ function openDay(off = 0) {
       <p class="lanelbl">Tomas</p>
       <div class="lane" data-lane="tomas">${laneEls(['fb', 'fo'])}</div>
       <p class="lanelbl">Pañal, llanto y panza</p>
-      <div class="lane" data-lane="marcas">${laneEls(['dp', 'cr', 'bl'])}</div>
+      <div class="lane" data-lane="marcas">${laneEls(['dp', 'cr', 'bl', 'pu'])}</div>
       <div class="hours"><span>12am</span><span>3</span><span>6am</span><span>9</span><span>12pm</span><span>3</span><span>6pm</span><span>9</span><span>12am</span></div>
     </div>
     <div class="dtip" id="dTip"><span class="why">👆 Toca una barra o un ícono para ver la hora y los detalles.</span></div>
@@ -1691,7 +1698,7 @@ const TOUR = [
   { el: '[data-ev=feed]', t: '<b>Cuando coma,</b> toca aquí. Eliges <b>pecho</b> (con cronómetro y lado) o <b>tetero</b> (tocas las onzas).' },
   { el: '#sleepBtn', t: '<b>Cuando se duerma</b> toca aquí, y <b>cuando se despierte</b> vuelves a tocar el mismo botón.' },
   { el: '[data-ev=diaper]', t: '<b>Cada cambio de pañal,</b> un toque aquí. Si hubo popó, toca <b>💩 Hubo popó</b> en el aviso de abajo: ayuda a detectar cólicos y estreñimiento. Si se te olvidó, la corriges luego en 📊 Resumen del día → recuadro 🧷 pañales.' },
-  { el: '#bellyBtn', t: '<b>Si le sientes la panza durita,</b> toca aquí. Así ves a qué horas le pasa y la app lo tiene en cuenta para sugerir cólico o gases.' },
+  { el: '.bellyrow', t: '<b>🎈 Panza durita</b> si se la sientes dura, y <b>😤 Pujó</b> cada vez que la escuches pujar. Así ves a qué horas le pasa y la app lo tiene en cuenta para sugerir cólico o gases.' },
   { el: '#dayBtn', t: '<b>Resumen y cronograma del día:</b> cuántas tomas, cuánto durmió y los pañales. En el cronograma <b>toca cualquier barra o ícono</b> para ver a qué hora fue y cuánto duró. Abajo está todo hora por hora, del más reciente al más temprano, y lo puedes compartir con el pediatra.' },
   { el: '#menuBtn', t: '<b>Menú:</b> invitar a la familia por WhatsApp, lo que la app va aprendiendo, respaldo y ver este tutorial otra vez.' },
   { t: '⭐ <b>Lo más importante:</b> después de que llore, cuando logres calmarla, marca <b>qué funcionó</b>. Con cada respuesta la app aprende a reconocer sus llantos.<br><br>¿Te equivocaste en algo? Siempre aparece <b>Deshacer</b> abajo.' }
