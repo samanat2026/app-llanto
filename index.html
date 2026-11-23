@@ -947,7 +947,7 @@ function buildDay(off) {
   });
   diapers.forEach(e => items.push({ k: 'dp', id: e.id, poop: !!e.poop, a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: `🧷 Cambio de pañal${e.poop ? ' · 💩 popó' : ''}`, by: who(e) }));
   cries.forEach(c => items.push({ k: 'cr', a: c.t, b: c.t, t: c.t, h: hhmm(c.t), x: `😢 Lloró${c.label ? ` → la calmó: ${Lb(c.label).e} ${Lb(c.label).t}` : ` · sugerí ${Lb(topOf(c.pred.p)).e} (sin marcar)`}`, by: who(c) }));
-  sleeps.forEach(s => items.push({ k: 'sl', a: s.ca, b: s.cb, t: s.ca, h: `${s.a < d0 ? 'ayer ' + hhmm(s.a) : hhmm(s.ca)}–${s.on && s.cb >= now() - 1000 ? 'ahora' : hhmm(s.cb)}`, x: isNight(s.a) ? `🌙 Sueño de la noche ${dur(s.cb - s.ca)}${s.on ? ' · sigue dormida' : ''}` : `😴 Durmió ${dur(s.cb - s.ca)}${cycleCount(s.cb - s.ca, new Date(s.a)) ? ` · ${cycleCount(s.cb - s.ca, new Date(s.a))}` : ''}${s.on ? ' · sigue dormida' : ''}`, by: who(s) }));
+  sleeps.forEach(s => items.push({ k: 'sl', a: s.ca, b: s.cb, t: s.ca, h: `${s.a < d0 ? 'ayer ' + hhmm(s.a) : hhmm(s.ca)}–${s.on && s.cb >= now() - 1000 ? 'ahora' : hhmm(s.cb)}`, x: isNight(s.a) ? `🌙 Sueño de la noche ${dur(s.cb - s.ca)}${cycleCount(s.cb - s.ca, new Date(s.a)) ? ` · ${cycleCount(s.cb - s.ca, new Date(s.a))}` : ''}${s.on ? ' · sigue dormida' : ''}` : `😴 Durmió ${dur(s.cb - s.ca)}${cycleCount(s.cb - s.ca, new Date(s.a)) ? ` · ${cycleCount(s.cb - s.ca, new Date(s.a))}` : ''}${s.on ? ' · sigue dormida' : ''}`, by: who(s) }));
   awakes.forEach(s => items.push({ k: 'aw', a: s.ca, b: s.cb, t: s.ca, h: `${hhmm(s.ca)}–${s.on ? 'ahora' : hhmm(s.cb)}`, x: `☀️ Despierta ${dur(s.cb - s.ca)}`, by: '' }));
   items.sort((a, b) => b.t - a.t);            // del más reciente al más temprano
   return { d0, d1, feeds, diapers, cries, sleeps, awakes, breastMin, oz, sleepMs, awakeMs, items };
@@ -1338,7 +1338,7 @@ function nightsHTML() {
       <div><b>${hhmm(S.start)}</b><small>suele empezar su noche</small></div>
       <div><b>${dur(S.stretch)}</b><small>dura el primer tramo (promedio)</small></div></div>` : ''}
     <div class="list nlist">${ns.map(n => `<div class="it"><span class="h">${new Date(n.a).toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric' }).replace('.', '')}</span>
-      <span>🌙 Se durmió ${hhmm(n.a)}<span class="by">${n.on ? `Sigue dormida · lleva ${dur(n.b - n.a)}` : `Primer tramo ${dur(n.b - n.a)} · despertó ${hhmm(n.b)}`}</span></span></div>`).join('')}</div>
+      <span>🌙 Se durmió ${hhmm(n.a)}<span class="by">${n.on ? `Sigue dormida · lleva ${dur(n.b - n.a)}` : `Primer tramo ${dur(n.b - n.a)}${cycleCount(n.b - n.a, new Date(n.a)) ? ` (${cycleCount(n.b - n.a, new Date(n.a))})` : ''} · despertó ${hhmm(n.b)}`}</span></span></div>`).join('')}</div>
     <p class="note">El promedio usa las últimas ${S.n || 0} noches completas. Si vas corriendo la hora de acostarla, aquí ves si funciona.</p>`;
 }
 function openNights() {
