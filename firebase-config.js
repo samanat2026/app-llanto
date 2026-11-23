@@ -11,4 +11,4 @@ window.FIREBASE_CONFIG = {
 
 // Clave pública para los avisos (Firebase → Configuración del proyecto → Cloud Messaging → Certificados push web).
 // No es secreta. Mientras esté vacía, el botón de avisos no aparece.
-window.FIREBASE_VAPID = '';
+window.FIREBASE_VAPID = 'BMjkZtcn_bT09okRu_Z2MJZ2zzh9f-QrqDwE08YNhHVasvX5UpxQfRFGUzfdUdglZEZCF3_5-UmqXD3F1Tcj47w';
