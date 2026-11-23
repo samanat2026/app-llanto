@@ -94,7 +94,8 @@
   .scard .ph.light{color:var(--warn)}
   .scard small{display:block;color:var(--mut);font-size:12px;margin-top:8px}
   .scard.night{background:linear-gradient(160deg,#1d2350,#16182c);border-color:#6c8cf655}
-  .nbar{height:10px;border-radius:5px;background:#ffffff14;margin:12px 0 8px;overflow:hidden}
+  .nbar{height:10px;border-radius:5px;background:#ffffff14;margin:6px 0 8px;overflow:hidden}
+  .scard .nh{margin:14px 0 2px;font-size:13px;color:#a9b8ff;font-weight:600}
   .nbar i{display:block;height:100%;background:linear-gradient(90deg,#6c8cf6,#a99ffa);border-radius:5px}
   .scard .lnk{display:block;background:none;color:#a9b8ff;font-size:13px;padding:8px 0 0;text-decoration:underline}
   .nlist .it .h{width:118px}
@@ -1278,10 +1279,12 @@ function openNights() {
   $('nClose').onclick = close; sh.hidden = false;
 }
 function renderNightCard(el, ls) {
-  const m = mins(ls.t), S = nightStats();
+  const m = mins(ls.t), S = nightStats(), C = cycleInfo(ls);
   const deep = m < 180 && hourOf(now()) >= NIGHT_FROM;
-  const phase = deep ? `<span class="ph deep">💤 Sus horas más profundas · es normal que no se despierte aunque la cambies o la muevas</span>`
-    : `<span class="ph light">🌤️ Sueño más ligero · puede despertarse para comer</span>`;
+  const phase = deep
+    ? (C.frac >= 0.67 ? `<span class="ph light">🌤️ Final del ciclo · en sus horas más profundas casi siempre sigue de largo</span>`
+                      : `<span class="ph deep">💤 Sus horas más profundas · es normal que no se despierte aunque la cambies o la muevas</span>`)
+    : C.phase;
   let exp;
   if (S.n >= 2) {
     const p = Math.min(100, m * 60000 / S.stretch * 100), wake = ls.t + S.stretch;
@@ -1291,17 +1294,17 @@ function renderNightCard(el, ls) {
   } else exp = `<p>Estoy aprendiendo sus noches: después de ${2 - S.n} ${2 - S.n === 1 ? 'noche más' : 'noches'} te digo a qué hora suele despertar.</p>`;
   el.innerHTML = `<div class="scard night">
     <div class="top"><b>🌙 Sueño de la noche · ${fmt(m)}</b><span>desde ${hhmm(ls.t)}</span></div>
-    ${exp}
+    <div class="cyc">${C.dots}</div>
+    <p>${C.status}</p>
     ${phase}
+    <h4 class="nh">Primer tramo de la noche</h4>
+    ${exp}
+    ${cycleNote(C.len)}
     <button class="lnk" id="nightsBtn">Ver sus últimas noches</button>
   </div>`;
   $('nightsBtn').onclick = openNights;
 }
-function renderSleepCard() {
-  const el = $('sleepCard'), ls = last(['sleep', 'wake']);
-  if (!ls || ls.type !== 'sleep') { el.innerHTML = ''; return; }
-  const h = hourOf(ls.t);
-  if (h >= NIGHT_FROM && h < NIGHT_TO) { renderNightCard(el, ls); return; }
+function cycleInfo(ls) {
   const len = cycleMin(), m = mins(ls.t), done = Math.floor(m / len), into = m - done * len;
   const left = Math.max(1, Math.ceil(len - into)), frac = into / len, curN = done + 1;
   const shown = Math.min(Math.max(curN, 3), 8);
@@ -1313,13 +1316,24 @@ function renderSleepCard() {
   const phase = frac < 0.22 ? `<span class="ph">🌙 Quedándose dormida · si se mueve o se queja, espera un poco</span>`
     : frac < 0.67 ? `<span class="ph deep">💤 Sueño profundo · buen momento para pasarla a la cuna</span>`
     : `<span class="ph light">🌤️ Sueño ligero · puede despertarse al final del ciclo</span>`;
+  return { len, m, frac, dots, status, phase };
+}
+function cycleNote(len) {
   const age = BABY && BABY.birth ? ageParts(BABY.birth) : null;
+  return `<small>A ${age ? `su edad (${age.m} ${age.m === 1 ? 'mes' : 'meses'})` : 'esta edad'} cada ciclo dura unos <b>${len} min</b>. Al terminar uno, se vuelve a dormir o se despierta. Es un promedio: cada bebé es distinto.${age ? '' : ' Pon la fecha de nacimiento arriba para ajustarlo.'}</small>`;
+}
+function renderSleepCard() {
+  const el = $('sleepCard'), ls = last(['sleep', 'wake']);
+  if (!ls || ls.type !== 'sleep') { el.innerHTML = ''; return; }
+  const h = hourOf(ls.t);
+  if (h >= NIGHT_FROM && h < NIGHT_TO) { renderNightCard(el, ls); return; }
+  const { len, m, dots, status, phase } = cycleInfo(ls);
   el.innerHTML = `<div class="scard">
     <div class="top"><b>😴 Dormida ${fmt(m)}</b><span>desde ${hhmm(ls.t)}</span></div>
     <div class="cyc">${dots}</div>
     <p>${status}</p>
     ${phase}
-    <small>A ${age ? `su edad (${age.m} ${age.m === 1 ? 'mes' : 'meses'})` : 'esta edad'} cada ciclo dura unos <b>${len} min</b>. Al terminar uno, se vuelve a dormir o se despierta. Es un promedio: cada bebé es distinto.${age ? '' : ' Pon la fecha de nacimiento arriba para ajustarlo.'}</small>
+    ${cycleNote(len)}
   </div>`;
 }
 
