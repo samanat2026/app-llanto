@@ -34,8 +34,8 @@ PWA que sugiere por qué llora la bebé (hambre, sueño, pañal, frío/calor, ot
 - Los demás cuidadores no ven esa lista (lo bloquean las reglas de Firestore).
 
 ## Avisos para la mamá (notificaciones)
-El archivo `worker/avisos.js` va en Cloudflare Workers (plan gratis) y cada 5 minutos revisa los registros y le avisa solo a la administradora: hora de comer, revisar el pañal, mucho tiempo despierta y que ya se va a despertar.
-Necesita: la clave pública de Cloud Messaging en `firebase-config.js` (`FIREBASE_VAPID`), los secretos `FAM` y `SA_JSON` en el Worker y un Cron Trigger `*/5 * * * *`. En la app: Menú ⋯ → 🔔 Activar avisos.
+El archivo `worker/avisos.js` va en Cloudflare Workers (plan gratis) y cada 10 minutos revisa los registros y le avisa solo a la administradora: hora de comer, revisar el pañal, mucho tiempo despierta y que ya se va a despertar.
+Necesita: la clave pública de Cloud Messaging en `firebase-config.js` (`FIREBASE_VAPID`), los secretos `FAM` y `SA_JSON` en el Worker y un Cron Trigger `*/10 * * * *`. En la app: Menú ⋯ → 🔔 Activar avisos.
 
 ## Privacidad
 El audio se analiza en el celular y nunca se sube. En la nube solo quedan horas, etiquetas, el nombre de quien registró y unos números que describen el llanto. Solo entra quien tenga el código de familia.

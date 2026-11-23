@@ -1,7 +1,7 @@
 /*
  * Avisos de la app de llantos — Cloudflare Worker
  *
- * Cada 5 minutos revisa los registros de la familia en Firebase y le manda
+ * Cada 10 minutos revisa los registros de la familia en Firebase y le manda
  * una notificación SOLO a la administradora (la mamá) cuando:
  *   🍼 ya le va tocando comer
  *   🧷 lleva más de 2 h 30 sin cambio de pañal (y está despierta)
@@ -12,7 +12,11 @@
  *   FAM      → el código de familia (ej. K7P3-Q9XD-M2RT)
  *   SA_JSON  → todo el contenido del archivo .json de la cuenta de servicio de Firebase
  *
- * Disparador (Settings → Triggers → Cron Triggers):  * /5 * * * *   (sin el espacio)
+ * Disparador (Configuración → Activadores cron):  * /10 * * * *   (sin el espacio)
+ *
+ * Lecturas de Firebase: cada revisión lee solo las últimas 24 h; los promedios (cada cuánto come,
+ * noches, siestas) se recalculan cada 3 h con 8 días y se guardan. Total aprox. 9.000 lecturas al día,
+ * lejos del límite gratis de 50.000.
  *
  * Probar desde el navegador:
  *   https://TU-WORKER.workers.dev/?prueba=CODIGO-DE-FAMILIA   → manda una notificación de prueba
@@ -100,6 +104,7 @@ async function eventsSince(fam, since, H) {
 }
 async function patchMember(fam, uid, data, H) {
   const enc = v => v == null ? { nullValue: null } : typeof v === 'string' ? { stringValue: v }
+    : typeof v === 'number' ? (Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v })
     : { mapValue: { fields: Object.fromEntries(Object.entries(v).map(([k, x]) => [k, enc(x)])) } };
   const mask = Object.keys(data).map(k => 'updateMask.fieldPaths=' + k).join('&');
   const r = await fetch(`${FS}/families/${fam}/members/${uid}?${mask}`, {
@@ -128,10 +133,12 @@ const hourOf = t => { const d = localDate(t); return d.getUTCHours() + d.getUTCM
 const hhmm = t => { const d = localDate(t), h = d.getUTCHours(); return `${h % 12 || 12}:${String(d.getUTCMinutes()).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`; };
 const median = a => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 
-function computeAlerts(events, notified = {}, now = Date.now()) {
-  const mins = t => (now - t) / 60000;
-  const ev = events.filter(e => e.type && e.type !== 'baby' && e.t > 0 && e.t <= now).sort((a, b) => a.t - b.t);
-  const last = types => { for (let i = ev.length - 1; i >= 0; i--) if (types.includes(ev[i].type)) return ev[i]; return null; };
+const clean = (events, now) => events.filter(e => e.type && e.type !== 'baby' && e.t > 0 && e.t <= now).sort((a, b) => a.t - b.t);
+const isNightStart = a => hourOf(a) >= NIGHT_FROM && hourOf(a) < NIGHT_TO;
+
+// Promedios de los últimos días (se recalculan cada 3 h)
+function computeStats(events, now = Date.now()) {
+  const ev = clean(events, now);
 
   const fts = ev.filter(e => e.type === 'feed').map(e => e.t), fg = [];
   for (let i = 1; i < fts.length; i++) { const x = (fts[i] - fts[i - 1]) / 60000; if (x >= 30 && x <= 360) fg.push(x); }
@@ -148,15 +155,23 @@ function computeAlerts(events, notified = {}, now = Date.now()) {
     if (e.type === 'sleep') { if (!st) st = e; }
     else if (st) { sleeps.push({ a: st.t, b: e.t }); st = null; }
   }
-  const isNightStart = a => hourOf(a) >= NIGHT_FROM && hourOf(a) < NIGHT_TO;
   const seen = new Set(), nights = [], naps = [];
   for (const s of sleeps) {
     const day = localDate(s.a).toISOString().slice(0, 10);
     if (isNightStart(s.a) && s.b - s.a >= NIGHT_MIN * 60000 && !seen.has(day)) { seen.add(day); nights.push(s.b - s.a); }
     else if (!isNightStart(s.a) && s.b - s.a >= 15 * 60000 && s.b - s.a <= 4 * 3600e3) naps.push(s.b - s.a);
   }
-  const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
+  const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
+  const n7 = nights.slice(-7), n10 = naps.slice(-10);
+  return { feedInt, wakeWin, nightAvg: avg(n7), nightN: n7.length, napAvg: avg(n10), napN: n10.length, at: now };
+}
 
+// Avisos con los registros de las últimas 24 h + los promedios guardados
+function computeAlerts(events, S, notified = {}, now = Date.now()) {
+  const mins = t => (now - t) / 60000;
+  const ev = clean(events, now);
+  const last = types => { for (let i = ev.length - 1; i >= 0; i--) if (types.includes(ev[i].type)) return ev[i]; return null; };
+  const { feedInt, wakeWin } = S;
   const out = [];
   const lsw = last(['sleep', 'wake']), asleep = !!lsw && lsw.type === 'sleep';
   const lf = last(['feed']), ld = last(['diaper']);
@@ -176,7 +191,7 @@ function computeAlerts(events, notified = {}, now = Date.now()) {
 
   if (asleep && notified.wake !== lsw.id) {
     const night = isNightStart(lsw.t);
-    const ref = night ? (nights.length >= 2 ? avg(nights.slice(-7)) : null) : (naps.length >= 3 ? avg(naps.slice(-10)) : null);
+    const ref = night ? (S.nightN >= 2 ? S.nightAvg : null) : (S.napN >= 3 ? S.napAvg : null);
     if (ref) {
       const exp = lsw.t + ref;
       if (now >= exp - 10 * 60000 && now <= exp + 30 * 60000)
@@ -204,14 +219,20 @@ async function check(env, test = false) {
     return 'Notificación de prueba enviada ✓';
   }
 
-  const events = await eventsSince(fam, Date.now() - 4 * 864e5, H);
+  let S = me.stats, upd = {};
+  if (!S || !S.at || Date.now() - S.at > 3 * 3600e3) {
+    S = computeStats(await eventsSince(fam, Date.now() - 8 * 864e5, H));
+    upd.stats = S;
+  }
+  const events = await eventsSince(fam, Date.now() - 864e5, H);
   const notified = me.notified || {};
-  const { alerts, feedInt, wakeWin, asleep } = computeAlerts(events, notified);
+  const { alerts, feedInt, wakeWin, asleep } = computeAlerts(events, S, notified);
   for (const a of alerts) {
     const r = await send(me.fcm, a.title, a.body, a.k, H);
     if (r === 'gone') { await patchMember(fam, famDoc.owner, { fcm: null }, H); return 'El celular ya no está registrado. Vuelve a activar las notificaciones en la app.'; }
     notified[a.k] = a.id;
   }
-  if (alerts.length) await patchMember(fam, famDoc.owner, { notified }, H);
+  if (alerts.length) upd.notified = notified;
+  if (Object.keys(upd).length) await patchMember(fam, famDoc.owner, upd, H);
   return `Revisé ${events.length} registros · ${asleep ? 'dormida' : 'despierta'} · come cada ~${fmt(feedInt)} · aguanta despierta ~${fmt(wakeWin)} · avisos enviados: ${alerts.length ? alerts.map(a => a.title).join(' | ') : 'ninguno'}`;
 }
