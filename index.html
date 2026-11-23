@@ -766,22 +766,23 @@ function openFeedSheet() {
     const sb = $('startBreast');
     if (sb) sb.onclick = () => {
       close();
+      const w = wakeForFeed(now());
       const e = addEvent('feed', now(), { mode: 'breast', segs: [{ s: side, t: now() }], end: null });
       render();
-      toast(`🤱 Cronómetro iniciado · ${SIDE[side]}`, [{ t: 'Deshacer', fn: () => { removeEvent(e.id); render(); } }]);
+      toast(`🤱 Cronómetro iniciado · ${SIDE[side]}${w ? ' · ☀️ se despertó' : ''}`, [{ t: 'Deshacer', fn: () => { removeEvent(e.id); if (w) removeEvent(w.id); render(); } }]);
     };
     sh.querySelectorAll('[data-min]').forEach(b => b.onclick = () => {
       close();
       const m = +b.dataset.min, t0 = now() - m * 60000;
-      quickLog('feed', `🤱 Pecho ${m} min`, { mode: 'breast', segs: [{ s: side, t: t0 }], end: now(), mins: m }, t0, false);
+      quickLog('feed', `🤱 Pecho ${m} min`, { mode: 'breast', segs: [{ s: side, t: t0 }], end: now(), mins: m }, t0, false, wakeForFeed(t0));
     });
     sh.querySelectorAll('[data-oz]').forEach(b => b.onclick = () => {
       close();
-      quickLog('feed', `🍼 Tetero ${b.dataset.oz} oz`, { mode: 'bottle', oz: +b.dataset.oz });
+      quickLog('feed', `🍼 Tetero ${b.dataset.oz} oz`, { mode: 'bottle', oz: +b.dataset.oz }, now(), true, wakeForFeed(now()));
     });
     const rb = $('resumeFeed');
     if (rb) rb.onclick = () => { close(); resumeFeed(rf.id); };
-    $('plainFeed').onclick = () => { close(); quickLog('feed', '🍼 Comió'); };
+    $('plainFeed').onclick = () => { close(); quickLog('feed', '🍼 Comió', {}, now(), true, wakeForFeed(now())); };
     $('closeSheet').onclick = close;
   };
   sh.onclick = ev => { if (ev.target === sh) close(); };
@@ -864,11 +865,18 @@ $('cryBtn').onclick = async () => {
 $('skipBtn').onclick = () => { if (rec) rec.stop = true; };
 
 /* ====== Registros rápidos ====== */
-function quickLog(type, label, extra = {}, t = now(), allowShift = true) {
-  const e = addEvent(type, t, extra); let back = 0;
+/* Si come mientras está registrada como dormida, ese despertar se registra solo (así la noche cuenta bien los tramos) */
+function wakeForFeed(t) {
+  const l = last(['sleep', 'wake']);
+  return l && l.type === 'sleep' && l.t < t ? addEvent('wake', t, { auto: 'feed' }) : null;
+}
+function quickLog(type, label, extra = {}, t = now(), allowShift = true, w = null) {
+  const e = addEvent(type, t, extra); let back = 0, sl = null;
+  if (w) label += ' · ☀️ se despertó';
   render();
-  const acts = [{ t: 'Deshacer', fn: () => { removeEvent(e.id); render(); } }];
-  if (allowShift) acts.push({ t: 'Fue hace 15 min', keep: true, fn: span => { shiftEvent(e.id, 15); back += 15; render(); span.textContent = `${label} · hace ${back} min`; } });
+  const acts = [{ t: 'Deshacer', fn: () => { removeEvent(e.id); if (w) removeEvent(w.id); if (sl) removeEvent(sl.id); render(); } }];
+  if (w) acts.push({ t: '😴 Se volvió a dormir', keep: true, fn: () => { const z = sl = addEvent('sleep'); render(); toast('😴 Se volvió a dormir · registrado', [{ t: 'Deshacer', fn: () => { removeEvent(z.id); render(); } }]); } });
+  if (allowShift) acts.push({ t: 'Fue hace 15 min', keep: true, fn: span => { shiftEvent(e.id, 15); if (w) shiftEvent(w.id, 15); back += 15; render(); span.textContent = `${label} · hace ${back} min`; } });
   toast(`${label} · registrado`, acts);
 }
 document.querySelectorAll('[data-ev]').forEach(b => b.onclick = () =>
