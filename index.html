@@ -540,6 +540,7 @@ function getCtx() {
     sinceBelly: (() => { const b = last('belly'); return b ? mins(b.t) : null; })(),
     sinceRefuse: (() => { const b = last('refuse'); return b ? mins(b.t) : null; })(),
     sincePush: (() => { const b = last('push'); return b ? mins(b.t) : null; })(),
+    sinceFussy: (() => { const b = D.events.filter(e => e.type === 'feed' && e.fussy && e.t <= now()).sort((a, b) => b.t - a.t)[0]; return b ? mins(b.end || b.t) : null; })(),
     sincePoop: (() => { const pp = D.events.filter(e => e.type === 'diaper' && e.poop).sort((a, b) => b.t - a.t)[0]; return pp ? mins(pp.t) : null; })(),
     hour: d.getHours() + d.getMinutes() / 60,
     feedInt: feedInterval(), wakeWin: wakeWindow(), noBreastSleep: breastPattern().sleepsWithout,
@@ -590,6 +591,7 @@ function colicPrior(c) {
   if (c.sinceFeed != null && c.sinceFeed >= 10 && c.sinceFeed <= 75) p += 0.06;
   if (c.sinceBelly != null && c.sinceBelly <= 120) p += 0.10;              // le sintieron la panza durita hace poco
   if (c.sincePush != null && c.sincePush <= 60) p += 0.10;                 // está pujando (gases / disquecia)
+  if (c.sinceFussy != null && c.sinceFussy <= 120) p += 0.10;              // estuvo inquieta en la última toma (gases, se traga aire)
   if (c.sincePoop != null) p += 0.12 * sig(c.sincePoop, 24 * 60, 120);
   return p;
 }
@@ -756,6 +758,7 @@ function why(k, c) {
     const r = [];
     if (c.sincePush != null && c.sincePush <= 60) r.push(`pujó hace ${fmt(c.sincePush)}`);
     if (c.sinceBelly != null && c.sinceBelly <= 120) r.push(`panza durita hace ${fmt(c.sinceBelly)}`);
+    if (c.sinceFussy != null && c.sinceFussy <= 120) r.push(c.sinceFussy < 5 ? 'estuvo inquieta en la toma que acaba de terminar' : `estuvo inquieta en la toma de hace ${fmt(c.sinceFussy)}`);
     if (c.sinceFeed != null && c.sinceFeed >= 10 && c.sinceFeed <= 75) r.push(`comió hace ${fmt(c.sinceFeed)}`);
     if (c.sincePoop != null) r.push(`última popó hace ${fmt(c.sincePoop)}`);
     if (c.hour >= 17 && c.hour < 23) r.push('es la hora típica de cólicos');
@@ -875,9 +878,10 @@ function renderBanner() {
       const snap = clean(x); finishFeed(x);
       const sl = withSleep && !asleep() ? addEvent('sleep') : null;
       render();
-      toast(`🤱 Pecho ${x.mins} min${sl ? ' · 😴 dormida' : ''} · guardado`, [{ t: 'Deshacer', fn: () => {
+      const lbl = `🤱 Pecho ${x.mins} min${sl ? ' · 😴 dormida' : ''}`;
+      toast(`${lbl} · guardado`, [{ t: 'Deshacer', fn: () => {
         restoreEvent(snap); if (sl) removeEvent(sl.id); render();
-      } }]);
+      } }, fussyAct(x.id, () => lbl)]);
     };
     $('fbSleep').onclick = () => end(true);
     $('fbStop').onclick = () => end(false);
@@ -1050,8 +1054,19 @@ function quickLog(type, label, extra = {}, t = now(), allowShift = true, w = nul
   render();
   const acts = [{ t: 'Deshacer', fn: () => { removeEvent(e.id); if (w) removeEvent(w.id); if (sl) removeEvent(sl.id); render(); } }];
   if (w) acts.push({ t: '😴 Se volvió a dormir', keep: true, fn: () => { const z = sl = addEvent('sleep'); render(); toast('😴 Se volvió a dormir · registrado', [{ t: 'Deshacer', fn: () => { removeEvent(z.id); render(); } }]); } });
-  if (allowShift) acts.push({ t: 'Fue hace 15 min', keep: true, fn: span => { shiftEvent(e.id, 15); if (w) shiftEvent(w.id, 15); back += 15; render(); span.textContent = `${label} · hace ${back} min`; } });
+  const txt = () => `${label}${type === 'feed' && isFussy(e.id) ? ' · 😣 inquieta' : ''}${back ? ` · hace ${back} min` : ''}`;
+  if (type === 'feed') acts.push(fussyAct(e.id, () => label + (back ? ` · hace ${back} min` : '')));
+  if (allowShift) acts.push({ t: 'Fue hace 15 min', keep: true, fn: span => { shiftEvent(e.id, 15); if (w) shiftEvent(w.id, 15); back += 15; render(); span.textContent = txt(); } });
   toast(`${label} · registrado`, acts);
+}
+/* Toma inquieta: se marca con un toque en el aviso de la toma o después en el cronograma */
+const isFussy = id => { const x = D.events.find(y => y.id === id); return !!(x && x.fussy); };
+function fussyAct(id, base) {
+  return { t: '😣 Estuvo inquieta', keep: true, fn: span => {
+    const x = D.events.find(y => y.id === id); if (!x) return;
+    x.fussy = !x.fussy; persist('events', x); render();
+    span.textContent = `${base()}${x.fussy ? ' · 😣 inquieta' : ''}`;
+  } };
 }
 document.querySelectorAll('[data-ev]').forEach(b => b.onclick = () =>
   b.dataset.ev === 'feed' ? openFeedSheet() : logDiaper());
@@ -1169,9 +1184,9 @@ function buildDay(off) {
     if (f.mode === 'breast') {
       const sides = (f.segs || []).map(s => s.s === 'izq' ? 'izq' : 'der').join(' → ');
       const end = f.end || now();
-      items.push({ k: 'fb', m: 'breast', a: f.t, b: end, t: f.t, h: `${hhmm(f.t)}–${f.end ? hhmm(end) : 'ahora'}`, x: `🤱 Pecho ${f.mins || Math.round(activeMs(f) / 60000)} min${sides ? ` (${sides})` : ''}${f.pauses && f.pauses.length ? ' · con pausas' : ''}${f.end ? '' : ' · en curso'}`, by: who(f) });
-    } else if (f.mode === 'bottle') items.push({ k: 'fo', m: 'bottle', a: f.t, b: f.t, t: f.t, h: hhmm(f.t), x: `🍼 Tetero ${String(f.oz).replace('.', ',')} oz`, by: who(f) });
-    else items.push({ k: 'fo', m: 'other', a: f.t, b: f.t, t: f.t, h: hhmm(f.t), x: '🍼 Comió', by: who(f) });
+      items.push({ k: 'fb', m: 'breast', id: f.id, fussy: !!f.fussy, a: f.t, b: end, t: f.t, h: `${hhmm(f.t)}–${f.end ? hhmm(end) : 'ahora'}`, x: `🤱 Pecho ${f.mins || Math.round(activeMs(f) / 60000)} min${sides ? ` (${sides})` : ''}${f.pauses && f.pauses.length ? ' · con pausas' : ''}${f.fussy ? ' · 😣 inquieta' : ''}${f.end ? '' : ' · en curso'}`, by: who(f) });
+    } else if (f.mode === 'bottle') items.push({ k: 'fo', m: 'bottle', id: f.id, fussy: !!f.fussy, a: f.t, b: f.t, t: f.t, h: hhmm(f.t), x: `🍼 Tetero ${String(f.oz).replace('.', ',')} oz${f.fussy ? ' · 😣 inquieta' : ''}`, by: who(f) });
+    else items.push({ k: 'fo', m: 'other', id: f.id, fussy: !!f.fussy, a: f.t, b: f.t, t: f.t, h: hhmm(f.t), x: `🍼 Comió${f.fussy ? ' · 😣 inquieta' : ''}`, by: who(f) });
   });
   diapers.forEach(e => items.push({ k: 'dp', id: e.id, poop: !!e.poop, a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: `🧷 Cambio de pañal${e.poop ? ' · 💩 popó' : ''}`, by: who(e) }));
   bellies.forEach(e => items.push({ k: 'bl', a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: '🎈 Panza durita', by: who(e) }));
@@ -1184,10 +1199,18 @@ function buildDay(off) {
   return { d0, d1, feeds, diapers, cries, bellies, pushes, sleeps, awakes, breastMin, oz, sleepMs, awakeMs, items };
 }
 /* Corregir un pañal ya registrado: marcar/quitar popó o eliminarlo */
-const dpActs = it => it.k !== 'dp' ? '' : `<span class="dpa">
+const dpActs = it => (it.k === 'fb' || it.k === 'fo') && it.id ? `<span class="dpa">
+  <button data-ffuss="${it.id}" class="${it.fussy ? 'on' : ''}">${it.fussy ? '😣 Inquieta ✓' : '😣 Estuvo inquieta'}</button></span>`
+  : it.k !== 'dp' ? '' : `<span class="dpa">
   <button data-dpoop="${it.id}" class="${it.poop ? 'on' : ''}">${it.poop ? '💩 Con popó ✓' : '💩 Hubo popó'}</button>
   <button data-ddel="${it.id}" class="del">🗑 Eliminar</button></span>`;
 function wireDp(root, refresh) {
+  root.querySelectorAll('[data-ffuss]').forEach(b => b.onclick = ev => {
+    ev.stopPropagation();
+    const x = D.events.find(e => e.id === b.dataset.ffuss); if (!x) return;
+    x.fussy = !x.fussy; persist('events', x); render(); refresh();
+    toast(x.fussy ? '😣 Marcado: toma inquieta' : 'Quitado: ya no sale como inquieta');
+  });
   root.querySelectorAll('[data-dpoop]').forEach(b => b.onclick = ev => {
     ev.stopPropagation();
     const x = D.events.find(e => e.id === b.dataset.dpoop); if (!x) return;
@@ -1220,7 +1243,8 @@ function openSum(R, kind, off) {
     sel = R.items.filter(i => i.k === 'fb' || i.k === 'fo');
     title = '🍼 Tomas';
     stats = st(sel.length, 'tomas') + st(gapTxt(sel), 'entre una y otra')
-      + st(R.breastMin + ' min', '🤱 de pecho') + st(R.oz + ' oz', '🍼 de tetero');
+      + st(R.breastMin + ' min', '🤱 de pecho') + st(R.oz + ' oz', '🍼 de tetero')
+      + st(sel.filter(i => i.fussy).length, '😣 inquieta');
   } else if (kind === 'pecho') {
     sel = R.items.filter(i => i.m === 'breast');
     title = '🤱 Pecho';
@@ -1349,7 +1373,8 @@ function openDay(off = 0) {
     if (best < 0 || bd > tol) { tip.innerHTML = '<span class="why">No hay registros a esa hora.</span>'; return; }
     const it = R.items[best];
     sec.querySelector(`.lane [data-i="${best}"]`).classList.add('sel');
-    tip.innerHTML = `<b>${it.x}</b><span>🕐 ${it.h}${it.by ? ` · ${esc(it.by)}` : ''}</span>`;
+    tip.innerHTML = `<b>${it.x}</b><span>🕐 ${it.h}${it.by ? ` · ${esc(it.by)}` : ''}</span>${dpActs(it)}`;
+    wireDp(tip, () => openDay(dayOff));
   });
   sec.querySelectorAll('[data-sum]').forEach(b => b.onclick = () => openSum(R, b.dataset.sum, dayOff));
   $('dPrev').onclick = () => openDay(dayOff - 1);
@@ -1896,7 +1921,8 @@ function learnData() {
   const peak = ts => { const c = BLOCKS.map(B => ({ B, n: ts.filter(t => t >= b0 && blockOf(t) === B).length })).sort((a, b) => b.n - a.n); return c[0].n >= 2 ? c[0].B : null; };
   return { N, nm, days, rDays, r0, b0, first,
     feeds: { now: feedInterval(), all: wmedian(fg), rec: recentMed(fg, 2), old: oldMed(fg, 2), blocks: byBlock(fg),
-      perDay: perDay(feedsT, r0, N), perDayOld: perDay(feedsT, b0, r0), breastMin },
+      perDay: perDay(feedsT, r0, N), perDayOld: perDay(feedsT, b0, r0), breastMin,
+      fussy: perDay(D.events.filter(e => e.type === 'feed' && e.fussy).map(e => e.t), r0, N) },
     wake: { all: wmedian(wg), rec: recentMed(wg, 2), old: oldMed(wg, 2), blocks: byBlock(wg) },
     naps: { n: naps.length / Math.max(1, rDays), avg: naps.length ? naps.reduce((x, s) => x + s.b - s.a, 0) / naps.length : null },
     night: nightStats(), bp: breastPattern(),
@@ -1945,7 +1971,7 @@ function openLearn() {
       ${HL.length ? `<ul>${HL.map(([e, t]) => `<li><span>${e}</span><p>${t}</p></li>`).join('')}</ul>` : none('Todavía no veo cambios ni patrones claros. Con unos días más de registros aparecen aquí.')}</div>
 
     ${card('🍼', 'Comida', `
-      ${kv([[`~${fmt(L.feeds.now)}`, 'entre tomas a esta hora'], [fmt1(L.feeds.perDay), 'tomas al día'], ...(L.feeds.breastMin ? [[`${Math.round(L.feeds.breastMin)} min`, 'de pecho al día']] : [])])}
+      ${kv([[`~${fmt(L.feeds.now)}`, 'entre tomas a esta hora'], [fmt1(L.feeds.perDay), 'tomas al día'], ...(L.feeds.breastMin ? [[`${Math.round(L.feeds.breastMin)} min`, 'de pecho al día']] : []), ...(L.feeds.fussy ? [[fmt1(L.feeds.fussy), '😣 tomas inquieta al día']] : [])])}
       <p class="lline">Últimos 2 días: cada <b>~${L.feeds.rec ? fmt(L.feeds.rec) : '—'}</b>${trend(L.feeds.rec, L.feeds.old)}</p>
       <h4>Cada cuánto come según la hora</h4>${blockBars(L.feeds.blocks, fmt)}`)}
 
