@@ -1775,10 +1775,7 @@ function openNights() {
 function renderNightCard(el, ls) {
   const m = mins(ls.t), S = nightStats(), C = cycleInfo(ls);
   const deep = m < 180 && hourOf(now()) >= NIGHT_FROM;
-  const phase = deep
-    ? (C.frac >= 0.67 ? `<span class="ph light">🌤️ Final del ciclo · en sus horas más profundas casi siempre sigue de largo</span>`
-                      : `<span class="ph deep">💤 Sus horas más profundas · es normal que no se despierte aunque la cambies o la muevas</span>`)
-    : C.phase;
+  const phase = C.phase + (deep ? `<p class="why" style="margin:6px 0 0">💤 Está en sus primeras horas de la noche, las más profundas: aunque termine un ciclo, casi siempre sigue de largo.</p>` : '');
   let exp;
   if (S.n >= 2) {
     const p = Math.min(100, m * 60000 / S.stretch * 100), wake = ls.t + S.stretch;
@@ -1821,9 +1818,12 @@ function cycleInfo(ls) {
   const status = done === 0
     ? `En su <b>primer ciclo</b> · le faltan <b>${left} min</b> para completarlo`
     : `<b>${done} ${done === 1 ? 'ciclo completo' : 'ciclos completos'}</b> · va en el ${curN}.º y le faltan <b>${left} min</b>`;
-  const phase = frac < 0.22 ? `<span class="ph">🌙 Quedándose dormida · si se mueve o se queja, espera un poco</span>`
-    : frac < 0.67 ? `<span class="ph deep">💤 Sueño profundo · buen momento para pasarla a la cuna</span>`
-    : `<span class="ph light">🌤️ Sueño ligero · puede despertarse al final del ciclo</span>`;
+  const toDeep = Math.max(1, Math.ceil(0.22 * len - into)), toLight = Math.max(1, Math.ceil(0.67 * len - into));
+  const phase = frac < 0.22
+    ? `<span class="ph">🌙 Quedándose dormida · si está en tus brazos, espera <b>~${toDeep} min</b> para acostarla o pasarla a la cuna</span>`
+    : frac < 0.67
+    ? `<span class="ph deep">💤 Sueño profundo · <b>buen momento para acostarla o pasarla a la cuna</b> (le quedan ~${toLight} min de sueño profundo)</span>`
+    : `<span class="ph light">🌤️ Sueño ligero · puede despertarse al final del ciclo. Si la vas a pasar a la cuna, mejor espera <b>~${left + Math.ceil(0.22 * len)} min</b>, cuando esté otra vez en sueño profundo</span>`;
   return { len, m, frac, dots, status, phase };
 }
 function cycleNote(len) {
