@@ -7,6 +7,7 @@ PWA que sugiere por qué llora la bebé (hambre, sueño, pañal, frío/calor, ot
 - **¿Qué la calmó?**: un toque. Hambre, Pañal o Sueño también registran la toma, el cambio o la siesta.
 - **🍼 Comió / 😴 Se durmió–☀️ Se despertó / 🧷 Pañal**: un toque. "Fue hace 15 min" corrige la hora.
 - **😴 Se volvió a dormir**: si se despierta y se vuelve a dormir en menos de 15 min (sin comer en medio), es un *despertar breve*: sigue el mismo sueño, no cuenta como siesta nueva ni reinicia el tiempo despierta.
+- **Indicación del pediatra** (toca la edad de la bebé): cada cuánto debe comer (por defecto 3 h, desde que empezó la toma anterior). El chip de la toma dice a qué hora le toca y el aviso llega con lo que pase primero: esto o lo que ella suele aguantar.
 - Lo que no se marque queda en **Pendientes**.
 - Todos ven lo mismo en tiempo real y quién registró cada cosa. Sin señal, se guarda y se sube después.
 

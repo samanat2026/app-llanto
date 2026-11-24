@@ -178,7 +178,8 @@ function computeStats(events, now = Date.now()) {
 }
 
 // Avisos con los registros de las últimas 24 h + los promedios guardados
-function computeAlerts(events, S, notified = {}, now = Date.now()) {
+// feedMax: indicación del pediatra en minutos (0 = sin indicación), desde que empezó la toma anterior
+function computeAlerts(events, S, notified = {}, now = Date.now(), feedMax = 180) {
   const mins = t => (now - t) / 60000;
   const ev = clean(events, now);
   const last = types => { for (let i = ev.length - 1; i >= 0; i--) if (types.includes(ev[i].type)) return ev[i]; return null; };
@@ -188,9 +189,12 @@ function computeAlerts(events, S, notified = {}, now = Date.now()) {
   const lf = last(['feed']), ld = last(['diaper']);
   const feeding = lf && lf.mode === 'breast' && !lf.end && mins(lf.t) < 180;
 
-  if (lf && !feeding && mins(lf.t) >= feedInt * 0.9 && mins(lf.t) < 10 * 60 && notified.feed !== lf.id)
-    out.push({ k: 'feed', id: lf.id, title: '🍼 Ya le va tocando comer',
-      body: `Comió hace ${fmt(mins(lf.t))} (${hhmm(lf.t)}). Suele comer cada ~${fmt(feedInt)}.${asleep ? ' Ahora está dormida.' : ''}` });
+  const fTh = feedMax ? Math.min(feedInt * 0.9, feedMax - 10) : feedInt * 0.9;
+  if (lf && !feeding && mins(lf.t) >= fTh && mins(lf.t) < 10 * 60 && notified.feed !== lf.id) {
+    const byDoc = feedMax && feedMax - 10 <= feedInt * 0.9;
+    out.push({ k: 'feed', id: lf.id, title: byDoc ? `🍼 Le toca comer a las ${hhmm(lf.t + feedMax * 60000)}` : '🍼 Ya le va tocando comer',
+      body: `Comió hace ${fmt(mins(lf.t))} (${hhmm(lf.t)}). ${byDoc ? `El pediatra indicó cada ${feedMax % 60 ? fmt(feedMax) : feedMax / 60 + ' h'}.` : `Suele comer cada ~${fmt(feedInt)}.`}${asleep ? ' Ahora está dormida.' : ''}` });
+  }
 
   const dInt = S.diaperInt || 180;
   if (ld && !asleep && mins(ld.t) >= dInt && mins(ld.t) < 10 * 60 && notified.diaper !== ld.id)
@@ -237,8 +241,10 @@ async function check(env, test = false) {
     upd.stats = S;
   }
   const events = await eventsSince(fam, Date.now() - 864e5, H);
+  const baby = await getDoc(`families/${fam}/events/baby`, H).catch(() => null);
+  const feedMax = baby && baby.feedMax != null ? Number(baby.feedMax) || 0 : 180;
   const notified = me.notified || {};
-  const { alerts, feedInt, wakeWin, asleep } = computeAlerts(events, S, notified);
+  const { alerts, feedInt, wakeWin, asleep } = computeAlerts(events, S, notified, Date.now(), feedMax);
   for (const a of alerts) {
     const r = await send(me.fcm, a.title, a.body, a.k, H);
     if (r === 'gone') { await patchMember(fam, famDoc.owner, { fcm: null }, H); return 'El celular ya no está registrado. Vuelve a activar las notificaciones en la app.'; }
