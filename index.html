@@ -278,6 +278,7 @@
     <p class="motto" id="motto"></p>
 
     <div id="feedBanner"></div>
+    <div id="wakeBanner"></div>
     <section class="status" id="status"></section>
     <section id="sleepCard"></section>
     <section id="spurt"></section>
@@ -790,7 +791,7 @@ function render() {
   const sb = $('sleepBtn'), sl = asleep();
   sb.innerHTML = sl ? '☀️<span>Se despertó</span>' : '😴<span>Se durmió</span>';
   sb.classList.toggle('on', sl);
-  renderBanner();
+  renderBanner(); renderWakeBanner();
   renderPending();
   renderWxAsk(); showWx(); renderAge(); renderMotto(); renderSleepCard(); renderSpurt();
 }
@@ -999,12 +1000,16 @@ const AUTO_TXT = { feed: 'Comió', diaper: 'Pañal', sleep: 'Se durmió' };
 function labelCry(id, l, fromResult) {
   const c = D.cries.find(x => x.id === id); if (!c) return;
   const prev = c.label || null; c.label = l; c.labeledBy = ME; persist('cries', c);
-  let ev = null;
-  if (!prev && now() - c.t < 45 * 60000 && AUTO[l] && !(AUTO[l] === 'sleep' && asleep())) ev = addEvent(AUTO[l]);
-  toast(`${LABELS[l].e} Guardado${ev ? ` · también registré "${AUTO_TXT[ev.type]}"` : ''}`, [
+  let ev = null, re = null;
+  if (!prev && now() - c.t < 45 * 60000 && AUTO[l] && !(AUTO[l] === 'sleep' && asleep())) {
+    // Si se despertó hace poco y la calmó el sueño, es el mismo sueño (despertar breve), no una siesta nueva
+    if (AUTO[l] === 'sleep') re = sleepAgain();
+    if (!re) ev = addEvent(AUTO[l]);
+  }
+  toast(`${LABELS[l].e} Guardado${re ? ` · se volvió a dormir ${aLos(re.m)}: sigue el mismo sueño` : ev ? ` · también registré "${AUTO_TXT[ev.type]}"` : ''}`, [
     { t: 'Deshacer', fn: () => {
       const cc = D.cries.find(x => x.id === id); if (cc) { cc.label = prev; persist('cries', cc); }
-      if (ev) removeEvent(ev.id); render(); if (fromResult && cc) renderResult(cc);
+      if (ev) removeEvent(ev.id); if (re) re.undo(); render(); if (fromResult && cc) renderResult(cc);
     } }
   ]);
   if (fromResult) $('result').hidden = true;
@@ -1017,6 +1022,9 @@ $('cryBtn').onclick = async () => {
   if (busy) return; busy = true;
   const wxP = refreshWeather(false);
   const ctx = getCtx();
+  // Si estaba registrada como dormida, llorar es despertarse: se pasa a despierta de una vez (los demás lo ven ya)
+  const cryWake = asleep() ? addEvent('wake', now(), { auto: 'cry' }) : null;
+  if (cryWake) render();
   $('cryTxt').textContent = 'Escuchando…'; $('skipBtn').hidden = false;
   let audio = null, noAudio = null;
   try {
@@ -1039,6 +1047,9 @@ $('cryBtn').onclick = async () => {
   $('cryTxt').textContent = 'Está llorando'; $('crySub').textContent = 'Toca y acerca el celular';
   $('bar').style.width = '0'; $('skipBtn').hidden = true; busy = false;
   renderResult(cry); render();
+  if (cryWake) toast(`☀️ Estaba dormida: la pasé a despierta${noAudio === 'nomic' ? ' · no pude usar el micrófono, usé solo los horarios' : ''}`, [
+    { t: 'Deshacer', fn: () => { removeEvent(cryWake.id); render(); } }
+  ]);
 };
 $('skipBtn').onclick = () => { if (rec) rec.stop = true; };
 
@@ -1093,7 +1104,53 @@ document.addEventListener('click', ev => {
 }, true);
 $('bellyBtn').onclick = () => quickLog('belly', '🎈 Panza durita');
 $('pushBtn').onclick = () => quickLog('push', '😤 Pujó');
-$('sleepBtn').onclick = () => asleep() ? quickLog('wake', '☀️ Se despertó') : quickLog('sleep', '😴 Se durmió');
+$('sleepBtn').onclick = () => {
+  if (asleep()) return quickLog('wake', '☀️ Se despertó');
+  const re = sleepAgain();
+  if (!re) return quickLog('sleep', '😴 Se durmió');
+  toastResleep(re);
+};
+
+/* ====== Despertar breve: se despertó y a los pocos minutos se volvió a dormir ======
+   Los bebés pasan de un ciclo de sueño al siguiente (~45-60 min) por un momento de sueño ligero y muchas veces
+   se despiertan ahí. Si se vuelve a dormir enseguida, el ciclo es nuevo pero el SUEÑO es el mismo (la misma siesta
+   o el mismo tramo de la noche): no se cuenta como siesta nueva ni reinicia el tiempo despierta.
+   Se guarda en el sueño como "despertar breve" (stirs) y se quita el "se despertó". Si comió en medio, no aplica:
+   esa toma ya cuenta como despertar. */
+const RESLEEP_MIN = 15;
+const aLos = m => m === 1 ? 'al minuto' : `a los ${m} min`;
+function briefWake() {
+  const w = last(['sleep', 'wake']);
+  if (!w || w.type !== 'wake' || w.auto === 'feed' || now() - w.t > RESLEEP_MIN * 60000) return null;
+  const s = D.events.filter(e => e.type === 'sleep' && e.t < w.t).sort((a, b) => b.t - a.t)[0];
+  if (!s) return null;
+  if (ongoingFeed() || D.events.some(e => e.type === 'feed' && (e.end || e.t) >= w.t - 60000 && e.t <= now())) return null;
+  return { w, s };
+}
+function sleepAgain() {
+  const bw = briefWake(); if (!bw) return null;
+  const { w, s } = bw, snapS = clean(s), snapW = clean(w);
+  const m = Math.max(1, Math.round(mins(w.t)));
+  s.stirs = (s.stirs || []).concat([{ t0: w.t, t1: now(), by: ME }]); persist('events', s);
+  removeEvent(w.id); render();
+  return { m, undo: () => { restoreEvent(snapS); D.events.push(snapW); persist('events', snapW); } };
+}
+function toastResleep(re) {
+  toast(`😴 Se volvió a dormir ${aLos(re.m)} · sigue el mismo sueño (despertar breve)`, [
+    { t: 'Deshacer', fn: () => { re.undo(); render(); } },
+    { t: 'Fue un sueño nuevo', fn: () => { re.undo(); quickLog('sleep', '😴 Se durmió'); } }
+  ]);
+}
+function renderWakeBanner() {
+  const el = $('wakeBanner'), bw = briefWake();
+  if (!bw || asleep()) { el.innerHTML = ''; return; }
+  const ago = Math.floor(mins(bw.w.t));
+  el.innerHTML = `<div class="banner paused">
+    <span>☀️ Se despertó hace ${ago < 1 ? 'menos de 1 min' : ago + ' min'}<br>
+    <small style="color:var(--mut)">¿Se volvió a dormir? Sigue el mismo sueño (${RESLEEP_MIN - ago} min más para decidir)</small></span>
+    <div class="bgrid" style="grid-template-columns:1fr"><button class="stop" id="wbResleep">😴 Se volvió a dormir</button></div></div>`;
+  $('wbResleep').onclick = () => { const re = sleepAgain(); if (re) toastResleep(re); };
+}
 
 /* ====== Toast ====== */
 let toastTimer = null;
@@ -1116,6 +1173,7 @@ function dayBounds(off) {
   const b = new Date(a); b.setDate(b.getDate() + 1);
   return [a.getTime(), b.getTime()];
 }
+const brief = n => `${n} ${n === 1 ? 'despertar breve' : 'despertares breves'}`;
 const dur = ms => { const m = Math.round(ms / 60000); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`; };
 /* Sueños registrados. Si hay una toma en medio de un sueño (se le dio de comer sin registrar que se despertó),
    esa toma cuenta como despertar: el sueño se parte en dos y el segundo empieza cuando termina la toma. */
@@ -1124,7 +1182,7 @@ const dur = ms => { const m = Math.round(ms / 60000); return m < 60 ? `${m} min`
 let _spKey = '', _sp = null, _ntKey = '', _nt = null;
 function spansKey() {
   let k = 0, n = 0;
-  for (const e of D.events) if (e.type === 'sleep' || e.type === 'wake' || e.type === 'feed') { n++; k = (k * 31 + (e.t || 0) + (e.end || 0)) % 1e15; }
+  for (const e of D.events) if (e.type === 'sleep' || e.type === 'wake' || e.type === 'feed') { n++; k = (k * 31 + (e.t || 0) + (e.end || 0) + (e.stirs ? e.stirs.length * 7919 : 0)) % 1e15; }
   return n + ':' + k + ':' + Math.floor(now() / 60000);
 }
 function sleepSpans() {
@@ -1152,6 +1210,10 @@ function sleepSpansRaw() {
     }
     if (cur) out.push(cur);
   }
+  // Despertares breves (se volvió a dormir enseguida): el sueño sigue siendo uno solo, pero se cuentan
+  const stirs = [];
+  for (const e of ev) if (e.type === 'sleep' && e.stirs) stirs.push(...e.stirs);
+  for (const x of out) x.stirs = stirs.filter(z => z.t0 >= x.a && z.t0 < x.b).length;
   return out;
 }
 function sleepIntervals(d0, d1) {
@@ -1193,7 +1255,7 @@ function buildDay(off) {
   refuses.forEach(e => items.push({ k: 'rf', a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: '🙅 Rechazó el seno', by: who(e) }));
   pushes.forEach(e => items.push({ k: 'pu', a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: '😤 Pujó', by: who(e) }));
   cries.forEach(c => items.push({ k: 'cr', a: c.t, b: c.t, t: c.t, h: hhmm(c.t), x: `😢 Lloró${c.label ? ` → la calmó: ${Lb(c.label).e} ${Lb(c.label).t}` : ` · sugerí ${Lb(topOf(c.pred.p)).e} (sin marcar)`}`, by: who(c) }));
-  sleeps.forEach(s => items.push({ k: 'sl', a: s.ca, b: s.cb, t: s.ca, h: `${s.a < d0 ? 'ayer ' + hhmm(s.a) : hhmm(s.ca)}–${s.on && s.cb >= now() - 1000 ? 'ahora' : hhmm(s.cb)}`, x: tramoOf(s.a) ? `🌙 Noche · tramo ${tramoOf(s.a).i} · ${dur(s.cb - s.ca)}${cycleCount(s.cb - s.ca, new Date(s.a)) ? ` · ${cycleCount(s.cb - s.ca, new Date(s.a))}` : ''}${s.on ? ' · sigue dormida' : ''}` : `😴 Durmió ${dur(s.cb - s.ca)}${cycleCount(s.cb - s.ca, new Date(s.a)) ? ` · ${cycleCount(s.cb - s.ca, new Date(s.a))}` : ''}${s.on ? ' · sigue dormida' : ''}`, by: who(s) }));
+  sleeps.forEach(s => items.push({ k: 'sl', a: s.ca, b: s.cb, t: s.ca, h: `${s.a < d0 ? 'ayer ' + hhmm(s.a) : hhmm(s.ca)}–${s.on && s.cb >= now() - 1000 ? 'ahora' : hhmm(s.cb)}`, x: tramoOf(s.a) ? `🌙 Noche · tramo ${tramoOf(s.a).i} · ${dur(s.cb - s.ca)}${cycleCount(s.cb - s.ca, new Date(s.a)) ? ` · ${cycleCount(s.cb - s.ca, new Date(s.a))}` : ''}${s.stirs ? ` · ${brief(s.stirs)}` : ''}${s.on ? ' · sigue dormida' : ''}` : `😴 Durmió ${dur(s.cb - s.ca)}${cycleCount(s.cb - s.ca, new Date(s.a)) ? ` · ${cycleCount(s.cb - s.ca, new Date(s.a))}` : ''}${s.stirs ? ` · ${brief(s.stirs)}` : ''}${s.on ? ' · sigue dormida' : ''}`, by: who(s) }));
   awakes.forEach(s => items.push({ k: 'aw', a: s.ca, b: s.cb, t: s.ca, h: `${hhmm(s.ca)}–${s.on ? 'ahora' : hhmm(s.cb)}`, x: `☀️ Despierta ${dur(s.cb - s.ca)}`, by: '' }));
   items.sort((a, b) => b.t - a.t);            // del más reciente al más temprano
   return { d0, d1, feeds, diapers, cries, bellies, pushes, sleeps, awakes, breastMin, oz, sleepMs, awakeMs, items };
@@ -1726,7 +1788,7 @@ function nightFull(n) {
   const total = tramos.reduce((x, t) => x + t.b - t.a, 0);
   const last = tramos[tramos.length - 1];
   const awake = tramos.slice(1).reduce((x, t, i) => x + t.a - tramos[i].b, 0);
-  return { n, end, tramos, total, wakes: tramos.length - 1, awake,
+  return { n, end, tramos, total, wakes: tramos.length - 1, awake, stirs: tramos.reduce((x, t) => x + (t.stirs || 0), 0),
     longest: Math.max(...tramos.map(t => t.b - t.a)), done: now() >= end, on: !!(last && last.on) };
 }
 function tramoOf(a) {
@@ -1761,8 +1823,9 @@ function nightsHTML() {
       const F = nightFull(n), cc = cycleCount(n.b - n.a, new Date(n.a));
       const first = n.on ? `Sigue dormida · lleva ${dur(n.b - n.a)}` : `Primer tramo ${dur(n.b - n.a)}${cc ? ` (${cc})` : ''} · despertó ${hhmm(n.b)}`;
       const rest = F.tramos.length > 1 ? `<br>Toda la noche: <b>${dur(F.total)}</b> dormida en ${F.tramos.length} tramos · se despertó ${F.wakes} ${F.wakes === 1 ? 'vez' : 'veces'} · tramo más largo ${dur(F.longest)}${F.on ? ' · sigue dormida' : ''}` : '';
+      const st = F.stirs ? `<br>${brief(F.stirs)} (se volvió a dormir enseguida)` : '';
       return `<div class="it"><span class="h">${new Date(n.a).toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric' }).replace('.', '')}</span>
-      <span>🌙 Se durmió ${hhmm(n.a)}<span class="by">${first}${rest}</span></span></div>`;
+      <span>🌙 Se durmió ${hhmm(n.a)}<span class="by">${first}${rest}${st}</span></span></div>`;
     }).join('')}</div>
     <p class="note">Toda la noche cuenta desde que se duerme para la noche y todos los sueños que empiecen antes de las ${NIGHT_END} am. Los promedios usan las últimas noches completas. Si vas corriendo la hora de acostarla, aquí ves si funciona.</p>`;
 }
@@ -1773,7 +1836,7 @@ function openNights() {
   $('nClose').onclick = close; sh.hidden = false;
 }
 function renderNightCard(el, ls) {
-  const m = mins(ls.t), S = nightStats(), C = cycleInfo(ls);
+  const m = mins(ls.t), S = nightStats(), C = cycleInfo(ls, lastStir(ls));
   const deep = m < 180 && hourOf(now()) >= NIGHT_FROM;
   const phase = C.phase + (deep ? `<p class="why" style="margin:6px 0 0">💤 Está en sus primeras horas de la noche, las más profundas: aunque termine un ciclo, casi siempre sigue de largo.</p>` : '');
   let exp;
@@ -1796,21 +1859,26 @@ function renderNightCard(el, ls) {
   $('nightsBtn').onclick = openNights;
 }
 function renderNightTramo(el, ls, tr) {
-  const C = cycleInfo(ls), F = tr.F;
+  const C = cycleInfo(ls, lastStir(ls)), F = tr.F;
   el.innerHTML = `<div class="scard night">
     <div class="top"><b>🌙 Noche · tramo ${tr.i} · ${fmt(C.m)}</b><span>desde ${hhmm(ls.t)}</span></div>
     <div class="cyc">${C.dots}</div>
     <p>${C.status}</p>
     ${C.phase}
     <h4 class="nh">Esta noche</h4>
-    <p>Lleva <b>${dur(F.total)}</b> dormida desde las ${hhmm(F.n.a)} · se ha despertado <b>${F.wakes} ${F.wakes === 1 ? 'vez' : 'veces'}</b> · tramo más largo ${dur(F.longest)}</p>
+    <p>Lleva <b>${dur(F.total)}</b> dormida desde las ${hhmm(F.n.a)} · se ha despertado <b>${F.wakes} ${F.wakes === 1 ? 'vez' : 'veces'}</b>${F.stirs ? ` (más ${brief(F.stirs)})` : ''} · tramo más largo ${dur(F.longest)}</p>
     ${cycleNote(C.len)}
     <button class="lnk" id="nightsBtn">Ver sus últimas noches</button>
   </div>`;
   $('nightsBtn').onclick = openNights;
 }
-function cycleInfo(ls) {
-  const len = cycleMin(), m = mins(ls.t), done = Math.floor(m / len), into = m - done * len;
+/* Si tuvo un despertar breve, al volverse a dormir arranca un ciclo nuevo: la fase se cuenta desde ahí,
+   y los ciclos que ya había hecho antes de despertarse se suman. */
+const lastStir = ls => { const e = D.events.find(x => x.id === ls.id); return e && e.stirs ? e.stirs.filter(z => z.t0 >= ls.t).pop() || null : null; };
+function cycleInfo(ls, st = null) {
+  const len = cycleMin(), m = mins(ls.t);
+  const pre = st && st.t1 > ls.t ? Math.max(1, Math.round((st.t0 - ls.t) / 60000 / len)) : 0;
+  const mm = pre ? mins(st.t1) : m, d1 = Math.floor(mm / len), done = pre + d1, into = mm - d1 * len;
   const left = Math.max(1, Math.ceil(len - into)), frac = into / len, curN = done + 1;
   const shown = Math.min(Math.max(curN, 3), 8);
   const dots = Array.from({ length: shown }, (_, k) => k < done ? '<i class="done"></i>'
@@ -1840,11 +1908,12 @@ function renderSleepCard() {
   const tr = tramoOf(ls.t);
   if (tr && tr.i > 1) { renderNightTramo(el, ls, tr); return; }
   if (h >= NIGHT_FROM && h < NIGHT_TO && !tr) { renderNightCard(el, ls); return; }
-  const { len, m, dots, status, phase } = cycleInfo(ls);
+  const st = lastStir(ls);
+  const { len, m, dots, status, phase } = cycleInfo(ls, st);
   el.innerHTML = `<div class="scard">
     <div class="top"><b>😴 Dormida ${fmt(m)}</b><span>desde ${hhmm(ls.t)}</span></div>
     <div class="cyc">${dots}</div>
-    <p>${status}</p>
+    <p>${status}${st ? `<br><small>☀️ Tuvo un despertar breve a las ${hhmm(st.t0)} y se volvió a dormir: sigue siendo el mismo sueño</small>` : ''}</p>
     ${phase}
     ${cycleNote(len)}
   </div>`;

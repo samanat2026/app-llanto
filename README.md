@@ -3,9 +3,10 @@
 PWA que sugiere por qué llora la bebé (hambre, sueño, pañal, frío/calor, otro) y aprende con cada llanto que marca cualquiera de los cuidadores.
 
 ## Uso (todo en un toque)
-- **Está llorando**: graba 6 s, analiza el llanto en el celular y muestra la causa más probable.
+- **Está llorando**: graba 6 s, analiza el llanto en el celular y muestra la causa más probable. Si estaba dormida, la pasa a despierta sola.
 - **¿Qué la calmó?**: un toque. Hambre, Pañal o Sueño también registran la toma, el cambio o la siesta.
 - **🍼 Comió / 😴 Se durmió–☀️ Se despertó / 🧷 Pañal**: un toque. "Fue hace 15 min" corrige la hora.
+- **😴 Se volvió a dormir**: si se despierta y se vuelve a dormir en menos de 15 min (sin comer en medio), es un *despertar breve*: sigue el mismo sueño, no cuenta como siesta nueva ni reinicia el tiempo despierta.
 - Lo que no se marque queda en **Pendientes**.
 - Todos ven lo mismo en tiempo real y quién registró cada cosa. Sin señal, se guarda y se sube después.
 
