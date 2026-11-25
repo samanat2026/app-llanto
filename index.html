@@ -1336,9 +1336,10 @@ function buildDay(off) {
   items.sort((a, b) => b.t - a.t);            // del más reciente al más temprano
   return { d0, d1, feeds, diapers, cries, bellies, pushes, sleeps, awakes, breastMin, oz, sleepMs, awakeMs, items };
 }
-/* Corregir un pañal ya registrado: marcar/quitar popó o eliminarlo */
+/* Corregir una toma o un pañal ya registrados: inquieta, popó o eliminarlo (p. ej. un registro que se fue por error) */
 const dpActs = it => (it.k === 'fb' || it.k === 'fo') && it.id ? `<span class="dpa">
-  <button data-ffuss="${it.id}" class="${it.fussy ? 'on' : ''}">${it.fussy ? '😣 Inquieta ✓' : '😣 Estuvo inquieta'}</button></span>`
+  <button data-ffuss="${it.id}" class="${it.fussy ? 'on' : ''}">${it.fussy ? '😣 Inquieta ✓' : '😣 Estuvo inquieta'}</button>
+  <button data-ddel="${it.id}" class="del">🗑 Eliminar</button></span>`
   : it.k !== 'dp' ? '' : `<span class="dpa">
   <button data-dpoop="${it.id}" class="${it.poop ? 'on' : ''}">${it.poop ? '💩 Con popó ✓' : '💩 Hubo popó'}</button>
   <button data-ddel="${it.id}" class="del">🗑 Eliminar</button></span>`;
@@ -1364,8 +1365,11 @@ function wireDp(root, refresh) {
     }
     const x = D.events.find(e => e.id === b.dataset.ddel); if (!x) return;
     const snap = { ...x };
-    removeEvent(x.id); render(); refresh();
-    toast('🧷 Pañal eliminado', [{ t: 'Deshacer', fn: () => { restoreEvent(snap); render(); refresh(); } }]);
+    // Si esa toma la había "despertado" sola, también se quita ese despertar (no pasó)
+    const w = x.type === 'feed' ? D.events.find(e => e.type === 'wake' && e.auto === 'feed' && Math.abs(e.t - x.t) < 60000) : null;
+    const wSnap = w ? { ...w } : null;
+    removeEvent(x.id); if (w) removeEvent(w.id); render(); refresh();
+    toast(x.type === 'feed' ? '🍼 Toma eliminada' : '🧷 Pañal eliminado', [{ t: 'Deshacer', fn: () => { restoreEvent(snap); if (wSnap) restoreEvent(wSnap); render(); refresh(); } }]);
   });
 }
 /* Resumen de una sola categoría del día (al tocar un recuadro) */
