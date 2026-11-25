@@ -214,6 +214,11 @@ public class MainActivity extends Activity {
             try {
                 if (fb.ensureAuth()) fb.member(fam, me);   // la sesión se renovó con otro usuario: volver a registrarse
                 List<JSONObject> r = fb.eventsSince(fam, System.currentTimeMillis() - 36 * 60 * MIN);
+                // Fecha de nacimiento (para la duración del ciclo de sueño según la edad): se revisa cada 6 h
+                if (System.currentTimeMillis() - sp.getLong("babyAt", 0) > 6 * 60 * MIN) {
+                    JSONObject baby = fb.get(fam, "events", "baby");
+                    sp.edit().putString("birth", baby == null ? "" : baby.optString("birth", "")).putLong("babyAt", System.currentTimeMillis()).apply();
+                }
                 h.post(() -> { evs = r; loaded = true; loadedAt = System.currentTimeMillis(); if (onMain && !busy) renderMain(); });
             } catch (Exception e) {
                 h.post(() -> { if (onMain && !busy) { renderMain(); toast("Sin conexión"); } });
@@ -291,6 +296,7 @@ public class MainActivity extends Activity {
             st.append("\n🧷 ").append(dp == null ? "sin pañal" : "hace " + fmt(minsSince(dp)));
         }
         add(text(st.toString(), 13, 0xFFE8E8F0, false));
+        if (loaded && sleeping) cycleBlock(sw);
 
         add(button("😢  Está llorando", PINK, 18, this::cry));
 
@@ -318,6 +324,65 @@ public class MainActivity extends Activity {
         out.setOnLongClickListener(v -> { sp.edit().remove("fam").apply(); fam = null; showSetup(); return true; });
         out.setOnClickListener(v -> toast("Mantén presionado para cambiar de familia"));
         add(out);
+    }
+
+    /* ====================== Ciclos de sueño (igual que en el celular) ======================
+       Cada ciclo dura según la edad (menos de 3 meses: 45 min; 3-6: 50; 6-12: 60). Dentro de cada ciclo:
+       primer 22% quedándose dormida, hasta el 67% sueño profundo, y al final sueño ligero, cuando puede despertarse. */
+    int cycleMin() {
+        String b = sp.getString("birth", "");
+        if (b == null || b.length() < 10) return 45;
+        try {
+            Calendar bd = Calendar.getInstance(), now = Calendar.getInstance();
+            bd.set(Integer.parseInt(b.substring(0, 4)), Integer.parseInt(b.substring(5, 7)) - 1, Integer.parseInt(b.substring(8, 10)));
+            int m = (now.get(Calendar.YEAR) - bd.get(Calendar.YEAR)) * 12 + now.get(Calendar.MONTH) - bd.get(Calendar.MONTH);
+            if (now.get(Calendar.DAY_OF_MONTH) < bd.get(Calendar.DAY_OF_MONTH)) m--;
+            return m < 3 ? 45 : m < 6 ? 50 : m < 12 ? 60 : 70;
+        } catch (Exception e) { return 45; }
+    }
+
+    void cycleBlock(JSONObject ls) {
+        long now = System.currentTimeMillis(), start = ls.optLong("t");
+        // Si comió en medio del sueño, el sueño actual empieza cuando terminó la toma
+        for (JSONObject e : evs)
+            if ("feed".equals(e.optString("type")) && e.optLong("t") > start + MIN) start = Math.max(start, Math.max(e.optLong("t"), e.optLong("end", 0)));
+        int len = cycleMin();
+        int pre = 0;
+        long base = start;
+        // Despertar breve: al volverse a dormir arranca un ciclo nuevo
+        JSONArray stirs = ls.optJSONArray("stirs");
+        if (stirs != null && stirs.length() > 0) {
+            JSONObject z = stirs.optJSONObject(stirs.length() - 1);
+            if (z != null && z.optLong("t1") > start) { pre = Math.max(1, Math.round((z.optLong("t0") - start) / (float) MIN / len)); base = z.optLong("t1"); }
+        }
+        double mm = (now - base) / (double) MIN;
+        int d1 = (int) Math.floor(mm / len), done = pre + d1;
+        double into = mm - d1 * len, frac = into / len;
+        long left = Math.max(1, (long) Math.ceil(len - into));
+        long endAt = now + left * MIN;
+        add(text((done == 0 ? "1.er ciclo" : done + (done == 1 ? " ciclo completo" : " ciclos completos") + " · va en el " + (done + 1) + ".º")
+                + "\nTermina a las " + hhmm(endAt) + " (en " + left + " min)", 12, 0xFFB8B8C8, false));
+        String ph; int col;
+        if (frac < 0.22) {
+            ph = "🌙 Quedándose dormida\nEspera ~" + Math.max(1, (long) Math.ceil(0.22 * len - into)) + " min para acostarla o pasarla a la cuna";
+            col = 0xFFB9C6FF;
+        } else if (frac < 0.67) {
+            ph = "💤 Sueño profundo\nBuen momento para pasarla a la cuna (~" + Math.max(1, (long) Math.ceil(0.67 * len - into)) + " min)";
+            col = 0xFF8FE3C9;
+        } else if (left <= 6) {
+            ph = "🔄 Pasando de un ciclo a otro\nNo hagas bulla: puede despertarse a las " + hhmm(endAt) + ". Si se mueve o se queja, espera un poco antes de cargarla";
+            col = 0xFFFFB74D;
+        } else {
+            ph = "🌤️ Sueño ligero\nPuede despertarse a las " + hhmm(endAt) + ". Haz poco ruido para que pase al siguiente ciclo";
+            col = 0xFFFFD98A;
+        }
+        TextView t = text(ph, 13, col, false);
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(0xFF22222E);
+        g.setCornerRadius(dp(14));
+        t.setBackground(g);
+        t.setPadding(dp(8), dp(6), dp(8), dp(6));
+        add(t);
     }
 
     /* ====================== Guardar ====================== */
