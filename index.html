@@ -629,9 +629,10 @@ function knn(cur) {
   for (let i = 0; i < dim; i++) sd[i] = Math.max(Math.sqrt(sd[i]), 0.05);
   const wDim = i => i < CTX_DIMS ? 1 : 0.6;
   const dist = v => Math.sqrt(v.reduce((a, x, i) => a + wDim(i) * ((x - q[i]) / sd[i]) ** 2, 0));
-  const nb = train.map((c, i) => ({ l: c.label, d: dist(X[i]) })).sort((a, b) => a.d - b.d).slice(0, Math.min(7, train.length));
+  const nb = train.map((c, i) => ({ l: c.label, mix: c.mix, d: dist(X[i]) })).sort((a, b) => a.d - b.d).slice(0, Math.min(7, train.length));
   const s = {}; KEYS.forEach(k => s[k] = 0.2);
-  nb.forEach(n => s[n.l] += 1 / (n.d + 0.3));
+  // "Seno y se durmió" se aprende repartido entre sueño y hambre (c.mix), según qué tan probable era cada uno
+  nb.forEach(n => { const w = 1 / (n.d + 0.3); if (n.mix) for (const k in n.mix) s[k] += w * n.mix[k]; else s[n.l] += w; });
   return { p: normP(s), n: train.length };
 }
 function predict(cur) {
@@ -1006,19 +1007,48 @@ function renderPending() {
   const shown = $('result').hidden ? null : currentCryId;
   const P = D.cries.filter(c => !c.label && c.id !== shown && now() - c.t < 48 * 3600e3).sort((a, b) => b.t - a.t).slice(0, 6);
   $('pending').innerHTML = P.length ? `<div class="card"><h3 style="margin-top:0">Pendientes — ¿qué la calmó?</h3>${P.map(c =>
-    `<div class="pend"><span class="t">${hhmm(c.t)}${cloud && c.by ? ' · ' + esc(c.by) : ''} ${c.pred && c.pred.p ? ` · sugerí ${Lb(topOf(c.pred.p)).e}` : ''}</span><div class="pb">${KEYS.map(k => `<button data-c="${c.id}" data-l="${k}">${LABELS[k].e}</button>`).join('')}</div></div>`
+    `<div class="pend"><span class="t">${hhmm(c.t)}${cloud && c.by ? ' · ' + esc(c.by) : ''} ${c.pred && c.pred.p ? ` · sugerí ${Lb(topOf(c.pred.p)).e}` : ''}</span><div class="pb">${KEYS.map(k => `<button data-c="${c.id}" data-l="${k}">${LABELS[k].e}</button>`).join('')}<button data-c="${c.id}" data-l="sueno" data-b="1" title="Seno y se durmió">🤱😴</button></div></div>`
   ).join('')}</div>` : '';
-  $('pending').querySelectorAll('[data-c]').forEach(b => b.onclick = () => labelCry(b.dataset.c, b.dataset.l, false));
+  $('pending').querySelectorAll('[data-c]').forEach(b => b.onclick = () => labelCry(b.dataset.c, b.dataset.l, false, !!b.dataset.b));
 }
 
 /* ====== Etiquetar: un toque = etiqueta + registro automático ====== */
 const AUTO = { hambre: 'feed', panal: 'diaper', sueno: 'sleep' };
 const AUTO_TXT = { feed: 'Comió', diaper: 'Pañal', sleep: 'Se durmió' };
+/* "Seno y se durmió": ¿era hambre o sueño? Depende de la hora y la situación, así que la app lo reparte sola:
+   - cuánto llevaba sin comer frente a lo que ella suele aguantar (de día también cuenta la indicación del pediatra)
+   - cuánto duró la toma, si se cronometró: pocos minutos = era más sueño; una toma larga = era hambre
+   Se aprende repartido (p. ej. 70% sueño, 30% hambre), así no se confunde la app con Samara. */
+function of2mins(c) {
+  const f = D.events.filter(e => e.type === 'feed' && e.mode === 'breast' && e.t >= c.t - 10 * 60000 && e.mins && !e.autoEst).sort((a, b) => b.t - a.t)[0];
+  return f ? f.mins : null;
+}
+function breastMix(c, fedMins) {
+  const ctx = c.ctx || {}, learned = ctx.feedLearn || feedInterval(c.t);
+  // Toma anterior a este llanto (no la de seno para calmarla, que pudo empezar justo antes de tocar el botón)
+  const pf = D.events.filter(e => e.type === 'feed' && e.t < c.t - 10 * 60000).sort((a, b) => b.t - a.t)[0];
+  const since = pf ? (c.t - pf.t) / 60000 : ctx.sinceFeed;
+  const target = Math.min(learned, docMax(c.t) || learned);
+  let h = 0.4, why = [];
+  if (since != null) {
+    const r = since / target;
+    h = r >= 0.9 ? 0.75 : r <= 0.5 ? 0.15 : 0.15 + (r - 0.5) / 0.4 * 0.6;
+    why.push(`comió hace ${fmt(since)}`);
+  }
+  if (fedMins != null) {
+    if (fedMins <= 5) { h -= 0.2; why.push(`tomó solo ${fedMins} min`); }
+    else if (fedMins >= 12) { h += 0.15; why.push(`tomó ${fedMins} min`); }
+  }
+  h = Math.max(0.1, Math.min(0.9, h));
+  const hp = Math.round(h * 10) * 10;
+  return { mix: { hambre: hp / 100, sueno: (100 - hp) / 100 }, txt: `lo aprendo como ${100 - hp}% sueño y ${hp}% hambre${why.length ? ` (${why.join(', ')})` : ''}` };
+}
 /* breast: "Seno y se durmió". Aprende el llanto como SUEÑO (no hambre), registra que se durmió y,
    si nadie registró la toma, también una toma de seno (marcada "para dormir"): sí tomó leche. */
 function labelCry(id, l, fromResult, breast = false) {
   const c = D.cries.find(x => x.id === id); if (!c) return;
-  const prev = c.label || null; c.label = l; c.labeledBy = ME; persist('cries', c);
+  const prev = c.label || null, prevMix = c.mix || null;
+  c.label = l; c.labeledBy = ME; delete c.mix; persist('cries', c);
   let ev = null, re = null;
   if (!prev && now() - c.t < 45 * 60000 && AUTO[l] && !(AUTO[l] === 'sleep' && asleep())) {
     // Si se despertó hace poco y la calmó el sueño, es el mismo sueño (despertar breve), no una siesta nueva
@@ -1030,14 +1060,16 @@ function labelCry(id, l, fromResult, breast = false) {
     const of = ongoingFeed();
     if (of) { ofSnap = clean(of); of.toSleep = true; finishFeed(of); }
     else if (!D.events.some(e => e.type === 'feed' && e.t >= c.t - 10 * 60000)) {
-      fe = addEvent('feed', Math.min(now() - 60000, Math.max(c.t, now() - 15 * 60000)), { mode: 'breast', toSleep: true });
+      fe = addEvent('feed', Math.min(now() - 60000, Math.max(c.t, now() - 15 * 60000)), { mode: 'breast', toSleep: true, autoEst: true });
       fe.end = now(); fe.mins = Math.max(1, Math.round((fe.end - fe.t) / 60000)); persist('events', fe);
     }
     if (ev && ev.type === 'sleep' && fe && ev.t <= fe.end) { ev.t = fe.end + 1000; persist('events', ev); }
   }
-  toast(`${breast ? '🤱😴 Seno y se durmió · lo aprendo como sueño' : `${LABELS[l].e} Guardado`}${breast && fe ? ' · registré la toma' : ''}${re ? ` · se volvió a dormir ${aLos(re.m)}: sigue el mismo sueño` : ev ? ` · también registré "${AUTO_TXT[ev.type]}"` : ''}`, [
+  let mixTxt = '';
+  if (breast) { const m = breastMix(c, of2mins(c)); c.mix = m.mix; c.label = m.mix.hambre > 0.5 ? 'hambre' : 'sueno'; persist('cries', c); mixTxt = m.txt; }
+  toast(`${breast ? `🤱😴 Seno y se durmió · ${mixTxt}` : `${LABELS[l].e} Guardado`}${breast && fe ? ' · registré la toma' : ''}${re ? ` · se volvió a dormir ${aLos(re.m)}: sigue el mismo sueño` : ev ? ` · también registré "${AUTO_TXT[ev.type]}"` : ''}`, [
     { t: 'Deshacer', fn: () => {
-      const cc = D.cries.find(x => x.id === id); if (cc) { cc.label = prev; persist('cries', cc); }
+      const cc = D.cries.find(x => x.id === id); if (cc) { cc.label = prev; if (prevMix) cc.mix = prevMix; else delete cc.mix; persist('cries', cc); }
       if (ev) removeEvent(ev.id); if (fe) removeEvent(fe.id); if (ofSnap) restoreEvent(ofSnap); if (re) re.undo(); render(); if (fromResult && cc) renderResult(cc);
     } }
   ]);
