@@ -1,0 +1,24 @@
+plugins { id 'com.android.application' }
+
+def runNo = (System.getenv('GITHUB_RUN_NUMBER') ?: '1').toInteger()
+
+android {
+    namespace 'co.samanat.llanto'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'co.samanat.llanto.reloj'
+        minSdk 30
+        targetSdk 35
+        versionCode runNo
+        versionName "1.${runNo}"
+    }
+    // Llave fija para que cada versión nueva se instale encima de la anterior sin borrar nada
+    signingConfigs {
+        rel { storeFile file('llanto-reloj.jks'); storePassword 'llanto2026'; keyAlias 'reloj'; keyPassword 'llanto2026' }
+    }
+    buildTypes {
+        release { minifyEnabled false; signingConfig signingConfigs.rel }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    lint { checkReleaseBuilds false; abortOnError false }
+}

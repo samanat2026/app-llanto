@@ -1,0 +1,26 @@
+# Construye la app del reloj (Wear OS) y la publica como descarga en Releases → "reloj".
+name: App del reloj
+on:
+  push:
+    paths: ['reloj/**', '.github/workflows/reloj.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '8.10.2' }
+      - name: Compilar
+        run: gradle -p reloj assembleRelease --no-daemon
+      - name: Publicar descarga
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          cp reloj/app/build/outputs/apk/release/app-release.apk app-llanto-reloj.apk
+          gh release delete reloj --cleanup-tag -y || true
+          gh release create reloj app-llanto-reloj.apk --title "App del reloj (versión ${{ github.run_number }})" \
+            --notes "Instalar en el Galaxy Watch con Wear Installer 2 desde el celular." --latest=false

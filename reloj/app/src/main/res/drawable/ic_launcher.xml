@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ícono: círculo rosado con una carita (gota de llanto) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48">
+    <path android:fillColor="#E0569B" android:pathData="M24,2a22,22 0,1 1,0 44a22,22 0,1 1,0 -44z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M17,19a2.5,2.5 0,1 1,0 5a2.5,2.5 0,1 1,0 -5z M31,19a2.5,2.5 0,1 1,0 5a2.5,2.5 0,1 1,0 -5z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M17,34c2,-3 4.5,-4.5 7,-4.5s5,1.5 7,4.5l-1.8,1.2c-1.5,-2.2 -3.3,-3.4 -5.2,-3.4s-3.7,1.2 -5.2,3.4z" />
+    <path android:fillColor="#9BD7FF" android:pathData="M14,26c0,0 -2.5,3.5 -2.5,5a2.5,2.5 0,0 0,5 0c0,-1.5 -2.5,-5 -2.5,-5z" />
+</vector>

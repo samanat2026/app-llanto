@@ -42,3 +42,9 @@ Necesita: la clave pública de Cloud Messaging en `firebase-config.js` (`FIREBAS
 
 ## Privacidad
 El audio se analiza en el celular y nunca se sube. En la nube solo quedan horas, etiquetas, el nombre de quien registró y unos números que describen el llanto. Solo entra quien tenga el código de familia.
+
+## App del reloj (Galaxy Watch / Wear OS)
+
+En `reloj/` está la app para el reloj (Java, sin librerías): Está llorando, pecho (izq/der, cambiar lado, terminar), tetero, pañal y se durmió/despertó (con despertar breve). Guarda en la misma Firebase con el mismo formato. Los llantos del reloj no llevan audio: el primer celular con la app abierta les calcula el contexto y la sugerencia (aparecen en Pendientes con ⌚).
+
+GitHub Actions la compila sola en cada cambio y la publica en **Releases → reloj** (`app-llanto-reloj.apk`). Se instala desde el celular con *Wear Installer 2* (depuración inalámbrica del reloj).

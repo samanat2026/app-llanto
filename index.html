@@ -333,7 +333,8 @@ const VAPID = window.FIREBASE_VAPID || '';
 const CFG = window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey ? window.FIREBASE_CONFIG : null;
 
 const $ = id => document.getElementById(id);
-const now = () => Date.now();
+let NOW_AT = null;                     // para calcular el contexto de un momento pasado (llantos marcados desde el reloj)
+const now = () => NOW_AT ?? Date.now();
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const mins = t => t == null ? null : (now() - t) / 60000;
 const clip = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -541,9 +542,22 @@ function breastPattern() {
   const sleepsWithout = R.n >= 3 && R.rate <= 0.35 && (R.refuses >= 1 || changed);
   return { R, B, changed, sleepsWithout };
 }
+/* Llantos marcados desde el reloj: llegan sin contexto ni sugerencia. El primer celular que los ve
+   calcula el contexto de ese momento (como si el botón se hubiera tocado en el celular) y la sugerencia. */
+function ctxAt(t) {
+  const evs = D.events;
+  try { NOW_AT = t; D.events = evs.filter(e => e.t <= t); return getCtx(); }
+  finally { NOW_AT = null; D.events = evs; }
+}
+function fillWatchCries() {
+  if (!D.events.length) return;
+  for (const c of D.cries) if (c.src === 'reloj' && !c.ctx && now() - c.t < 48 * 3600e3) {
+    c.ctx = ctxAt(c.t); c.pred = predict(c); persist('cries', c);
+  }
+}
 function asleep() { const l = last(['sleep', 'wake']); return !!l && l.type === 'sleep'; }
 function getCtx() {
-  const f = last('feed'), dp = last('diaper'), sw = last(['sleep', 'wake']), d = new Date();
+  const f = last('feed'), dp = last('diaper'), sw = last(['sleep', 'wake']), d = new Date(now());
   return {
     sinceFeed: f ? mins(f.t) : null,
     awake: sw ? (sw.type === 'wake' ? mins(sw.t) : 0) : null,
@@ -619,7 +633,7 @@ function ctxVec(c) {
 }
 function knn(cur) {
   const useAudio = !!cur.audio;
-  const train = D.cries.filter(c => c.label && LABELS[c.label] && c.id !== cur.id && (!useAudio || (c.audio && c.audio.length === cur.audio.length)));
+  const train = D.cries.filter(c => c.label && c.ctx && LABELS[c.label] && c.id !== cur.id && (!useAudio || (c.audio && c.audio.length === cur.audio.length)));
   if (train.length < 3) return null;
   const vec = c => useAudio ? ctxVec(c.ctx).concat(c.audio) : ctxVec(c.ctx);
   const X = train.map(vec), q = vec(cur), dim = q.length;
@@ -786,6 +800,7 @@ function why(k, c) {
 /* ====== Pantalla ====== */
 let currentCryId = null;
 function render() {
+  fillWatchCries();
   if ($('app').hidden) return;
   const c = getCtx();
   const by = (e, detail = '') => {
@@ -1007,7 +1022,7 @@ function renderPending() {
   const shown = $('result').hidden ? null : currentCryId;
   const P = D.cries.filter(c => !c.label && c.id !== shown && now() - c.t < 48 * 3600e3).sort((a, b) => b.t - a.t).slice(0, 6);
   $('pending').innerHTML = P.length ? `<div class="card"><h3 style="margin-top:0">Pendientes — ¿qué la calmó?</h3>${P.map(c =>
-    `<div class="pend"><span class="t">${hhmm(c.t)}${cloud && c.by ? ' · ' + esc(c.by) : ''} ${c.pred && c.pred.p ? ` · sugerí ${Lb(topOf(c.pred.p)).e}` : ''}</span><div class="pb">${KEYS.map(k => `<button data-c="${c.id}" data-l="${k}">${LABELS[k].e}</button>`).join('')}<button data-c="${c.id}" data-l="sueno" data-b="1" title="Seno y se durmió">🤱😴</button></div></div>`
+    `<div class="pend"><span class="t">${hhmm(c.t)}${c.src === 'reloj' ? ' ⌚' : ''}${cloud && c.by ? ' · ' + esc(c.by) : ''} ${c.pred && c.pred.p ? ` · sugerí ${Lb(topOf(c.pred.p)).e}` : ''}</span><div class="pb">${KEYS.map(k => `<button data-c="${c.id}" data-l="${k}">${LABELS[k].e}</button>`).join('')}<button data-c="${c.id}" data-l="sueno" data-b="1" title="Seno y se durmió">🤱😴</button></div></div>`
   ).join('')}</div>` : '';
   $('pending').querySelectorAll('[data-c]').forEach(b => b.onclick = () => labelCry(b.dataset.c, b.dataset.l, false, !!b.dataset.b));
 }
@@ -1315,7 +1330,7 @@ function buildDay(off) {
   bellies.forEach(e => items.push({ k: 'bl', a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: '🎈 Panza durita', by: who(e) }));
   refuses.forEach(e => items.push({ k: 'rf', a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: '🙅 Rechazó el seno', by: who(e) }));
   pushes.forEach(e => items.push({ k: 'pu', a: e.t, b: e.t, t: e.t, h: hhmm(e.t), x: '😤 Pujó', by: who(e) }));
-  cries.forEach(c => items.push({ k: 'cr', a: c.t, b: c.t, t: c.t, h: hhmm(c.t), x: `😢 Lloró${c.label ? ` → la calmó: ${Lb(c.label).e} ${Lb(c.label).t}` : ` · sugerí ${Lb(topOf(c.pred.p)).e} (sin marcar)`}`, by: who(c) }));
+  cries.forEach(c => items.push({ k: 'cr', a: c.t, b: c.t, t: c.t, h: hhmm(c.t), x: `😢 Lloró${c.label ? ` → la calmó: ${Lb(c.label).e} ${Lb(c.label).t}` : `${c.pred && c.pred.p ? ` · sugerí ${Lb(topOf(c.pred.p)).e}` : ''} (sin marcar)`}${c.src === 'reloj' ? ' ⌚' : ''}`, by: who(c) }));
   sleeps.forEach(s => items.push({ k: 'sl', a: s.ca, b: s.cb, t: s.ca, h: `${s.a < d0 ? 'ayer ' + hhmm(s.a) : hhmm(s.ca)}–${s.on && s.cb >= now() - 1000 ? 'ahora' : hhmm(s.cb)}`, x: tramoOf(s.a) ? `🌙 Noche · tramo ${tramoOf(s.a).i} · ${dur(s.cb - s.ca)}${cycleCount(s.cb - s.ca, new Date(s.a)) ? ` · ${cycleCount(s.cb - s.ca, new Date(s.a))}` : ''}${s.stirs ? ` · ${brief(s.stirs)}` : ''}${s.on ? ' · sigue dormida' : ''}` : `😴 Durmió ${dur(s.cb - s.ca)}${cycleCount(s.cb - s.ca, new Date(s.a)) ? ` · ${cycleCount(s.cb - s.ca, new Date(s.a))}` : ''}${s.stirs ? ` · ${brief(s.stirs)}` : ''}${s.on ? ' · sigue dormida' : ''}`, by: who(s) }));
   awakes.forEach(s => items.push({ k: 'aw', a: s.ca, b: s.cb, t: s.ca, h: `${hhmm(s.ca)}–${s.on ? 'ahora' : hhmm(s.cb)}`, x: `☀️ Despierta ${dur(s.cb - s.ca)}`, by: '' }));
   items.sort((a, b) => b.t - a.t);            // del más reciente al más temprano
