@@ -858,13 +858,14 @@ function resumeFeed(id) {
   const snap = clean(x);
   x.pauses = x.pauses || []; x.pauses.push({ t0: x.end, t1: now() });
   x.end = null; delete x.mins; persist('events', x);
-  // El "se durmió" del final fue solo una microsiesta: se quita
-  const s = last(['sleep', 'wake']);
-  const removed = s && s.type === 'sleep' && s.t >= snap.end - 60000 ? s : null;
-  if (removed) removeEvent(removed.id);
+  // Lo que se anotó en la pausa ("se durmió" y "se despertó") fue adormecerse al pecho: se quita
+  const gone = D.events.filter(e => (e.type === 'sleep' || e.type === 'wake') && e.t >= snap.end - 60000);
+  const hasSleep = gone.some(e => e.type === 'sleep');
+  const removed = hasSleep ? gone : [];
+  removed.forEach(e => removeEvent(e.id));
   render();
-  toast(`↩ Sigue la misma toma${removed ? ' · quité el "se durmió"' : ''}`, [{ t: 'Deshacer', fn: () => {
-    restoreEvent(snap); if (removed) { D.events.push(removed); persist('events', removed); } render();
+  toast(`↩ Sigue la misma toma${removed.length ? ' · se había adormecido al pecho' : ''}`, [{ t: 'Deshacer', fn: () => {
+    restoreEvent(snap); removed.forEach(e => { D.events.push(e); persist('events', e); }); render();
   } }]);
 }
 function renderBanner() {
@@ -1266,6 +1267,7 @@ function sleepSpans() {
   if (key === _spKey && _sp) return _sp;
   _sp = sleepSpansRaw(); _spKey = key; return _sp;
 }
+let DOZES = {};                       // id de la toma → veces que se adormeció al pecho
 function sleepSpansRaw() {
   const ev = D.events.filter(e => e.type === 'sleep' || e.type === 'wake').sort((a, b) => a.t - b.t);
   const raw = []; let s = null;
@@ -1274,6 +1276,16 @@ function sleepSpansRaw() {
     else if (s != null) { raw.push({ a: s.t, b: e.t, by: s.by }); s = null; }
   }
   if (s != null) raw.push({ a: s.t, b: now(), by: s.by, on: true });
+  /* Adormecida al pecho: un "se durmió" y "se despertó" que quedan DENTRO de una misma toma de pecho
+     (con pausas) no es un tramo de sueño: se quedó dormida al seno y siguió tomando. No cuenta como sueño
+     ni como despertar de la noche; se cuenta en la toma ("se adormeció"). */
+  const breast = D.events.filter(e => e.type === 'feed' && e.mode === 'breast').map(e => ({ a: e.t, b: e.end || now(), id: e.id }));
+  const dozes = {};
+  for (let i = raw.length - 1; i >= 0; i--) {
+    const x = raw[i], f = !x.on && breast.find(f => x.a >= f.a && x.b <= f.b + 60000 && x.b - x.a < RESUME_MIN * 60000);
+    if (f) { dozes[f.id] = (dozes[f.id] || 0) + 1; raw.splice(i, 1); }
+  }
+  DOZES = dozes;
   const feeds = D.events.filter(e => e.type === 'feed').map(e => ({ a: e.t, b: Math.max(e.t, e.end || e.t) })).sort((x, y) => x.a - y.a);
   const out = [];
   for (const x of raw) {
@@ -1322,7 +1334,7 @@ function buildDay(off) {
     if (f.mode === 'breast') {
       const sides = (f.segs || []).map(s => s.s === 'izq' ? 'izq' : 'der').join(' → ');
       const end = f.end || now();
-      items.push({ k: 'fb', m: 'breast', id: f.id, fussy: !!f.fussy, a: f.t, b: end, t: f.t, h: `${hhmm(f.t)}–${f.end ? hhmm(end) : 'ahora'}`, x: `🤱 Pecho ${f.mins || Math.round(activeMs(f) / 60000)} min${sides ? ` (${sides})` : ''}${f.pauses && f.pauses.length ? ' · con pausas' : ''}${f.fussy ? ' · 😣 inquieta' : ''}${f.end ? '' : ' · en curso'}`, by: who(f) });
+      items.push({ k: 'fb', m: 'breast', id: f.id, fussy: !!f.fussy, a: f.t, b: end, t: f.t, h: `${hhmm(f.t)}–${f.end ? hhmm(end) : 'ahora'}`, x: `🤱 Pecho ${f.mins || Math.round(activeMs(f) / 60000)} min${sides ? ` (${sides})` : ''}${f.pauses && f.pauses.length ? ' · con pausas' : ''}${(sleepSpans(), DOZES[f.id]) ? ` · 😴 se adormeció ${DOZES[f.id] === 1 ? '1 vez' : DOZES[f.id] + ' veces'}` : ''}${f.fussy ? ' · 😣 inquieta' : ''}${f.end ? '' : ' · en curso'}`, by: who(f) });
     } else if (f.mode === 'bottle') items.push({ k: 'fo', m: 'bottle', id: f.id, fussy: !!f.fussy, a: f.t, b: f.t, t: f.t, h: hhmm(f.t), x: `🍼 Tetero ${String(f.oz).replace('.', ',')} oz${f.fussy ? ' · 😣 inquieta' : ''}`, by: who(f) });
     else items.push({ k: 'fo', m: 'other', id: f.id, fussy: !!f.fussy, a: f.t, b: f.t, t: f.t, h: hhmm(f.t), x: `🍼 Comió${f.fussy ? ' · 😣 inquieta' : ''}`, by: who(f) });
   });
