@@ -283,7 +283,10 @@ public class MainActivity extends Activity {
         StringBuilder st = new StringBuilder();
         if (!loaded) st.append("Cargando…");
         else {
-            st.append("🍼 ").append(lf == null ? "sin tomas" : "hace " + fmt(minsSince(lf)));
+            // Desde el INICIO de la toma (como cuentan los pediatras); si fue larga, también cuándo terminó
+            st.append("🍼 ").append(lf == null ? "sin tomas" : "empezó hace " + fmt(minsSince(lf)));
+            if (lf != null && !empty(lf, "end") && lf.optLong("end") - lf.optLong("t") >= 15 * MIN)
+                st.append("\n   terminó hace ").append(fmt((now - lf.optLong("end")) / MIN));
             st.append("\n").append(sleeping ? "😴 dormida " : "☀️ despierta ").append(sw == null ? "" : fmt(minsSince(sw)));
             st.append("\n🧷 ").append(dp == null ? "sin pañal" : "hace " + fmt(minsSince(dp)));
         }

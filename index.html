@@ -810,7 +810,7 @@ function render() {
   const chip = (lab, v, alert, e, detail) => `<div class="chip ${alert ? 'alert' : ''}"><b>${fmt(v)}</b><small>${lab}</small>${by(e, detail)}</div>`;
   const ls = last('sleep'), lf = last('feed');
   $('status').innerHTML =
-    chip('🍼 desde que comió', c.sinceFeed, c.sinceFeed != null && (c.sinceFeed > c.feedInt * 0.85 || (docMax() && c.sinceFeed >= feedMax() - 15)), lf, [feedDetail(lf), lf && feedMax() && !docNight(lf.t + feedMax() * 60000) ? `toca ${hhmm(lf.t + feedMax() * 60000)}` : ''].filter(Boolean).join(' · ')) +
+    chip('🍼 desde que empezó a comer', c.sinceFeed, c.sinceFeed != null && (c.sinceFeed > c.feedInt * 0.85 || (docMax() && c.sinceFeed >= feedMax() - 15)), lf, [feedDetail(lf), lf && feedMax() && !docNight(lf.t + feedMax() * 60000) ? `toca ${hhmm(lf.t + feedMax() * 60000)}` : ''].filter(Boolean).join(' · ')) +
     (asleep() ? `<div class="chip"><b>Dormida</b><small>😴 ${fmt(mins(ls.t))}</small>${by(ls)}</div>`
               : chip('☀️ despierta', c.awake, c.awake != null && c.awake > c.wakeWin * 0.9, last('wake'))) +
     chip('🧷 desde el pañal', c.sinceDiaper, c.sinceDiaper != null && c.sinceDiaper > diaperInt(), last('diaper'), c.sincePoop != null ? `💩 hace ${fmt(c.sincePoop)}` : '');
@@ -832,7 +832,8 @@ function lastSide() {
 function feedDetail(e) {
   if (!e) return '';
   if (e.mode === 'bottle') return `${String(e.oz).replace('.', ',')} oz`;
-  if (e.mode === 'breast') return e.end ? `pecho ${e.mins} min` : 'pecho en curso';
+  // Se cuenta desde el inicio (como los pediatras), pero si la toma fue larga se dice cuándo terminó
+  if (e.mode === 'breast') return e.end ? `pecho ${e.mins} min${now() - e.end >= 60000 && e.end - e.t >= 15 * 60000 ? `, terminó hace ${fmt(mins(e.end))}` : ''}` : 'pecho en curso';
   return '';
 }
 /* Pausas: cuando se queda dormida un momento y vuelve a buscar el pecho, es la MISMA toma */
