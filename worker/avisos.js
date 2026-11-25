@@ -189,6 +189,8 @@ function computeAlerts(events, S, notified = {}, now = Date.now(), feedMax = 180
   const lf = last(['feed']), ld = last(['diaper']);
   const feeding = lf && lf.mode === 'breast' && !lf.end && mins(lf.t) < 180;
 
+  // De noche (7 pm a 6 am) la indicación del pediatra no aplica: como antes, con lo que ella suele aguantar
+  { const h = localDate(now).getUTCHours(); if (h >= 19 || h < 6) feedMax = 0; }
   const fTh = feedMax ? Math.min(feedInt * 0.9, feedMax - 10) : feedInt * 0.9;
   if (lf && !feeding && mins(lf.t) >= fTh && mins(lf.t) < 10 * 60 && notified.feed !== lf.id) {
     const byDoc = feedMax && feedMax - 10 <= feedInt * 0.9;

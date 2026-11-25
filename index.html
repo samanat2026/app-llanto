@@ -516,7 +516,11 @@ function feedInterval(t = now()) { return atBlock(feedGaps(), t, 180); }
    lo que ella suele aguantar o lo que dijo el pediatra. */
 const FEED_MAX_DEF = 180;
 const feedMax = () => BABY && BABY.feedMax != null ? Number(BABY.feedMax) || 0 : FEED_MAX_DEF;
-function feedTarget(t = now()) { const l = feedInterval(t), m = feedMax(); return m ? Math.min(l, m) : l; }
+/* De noche (7 pm a 6 am) la indicación del pediatra no aplica: se deja como antes, con lo que ella suele aguantar */
+const DOC_NIGHT_FROM = 19, DOC_NIGHT_TO = 6;
+const docNight = (t = now()) => { const h = new Date(t).getHours(); return h >= DOC_NIGHT_FROM || h < DOC_NIGHT_TO; };
+const docMax = (t = now()) => docNight(t) ? 0 : feedMax();
+function feedTarget(t = now()) { const l = feedInterval(t), m = docMax(t); return m ? Math.min(l, m) : l; }
 function wakeWindow(t = now()) { return atBlock(wakeGaps(), t, 80); }
 
 /* Seno y sueño: ¿se duerme pegada al seno? ¿come al despertar? (últimos 2 días contra los anteriores) */
@@ -758,7 +762,7 @@ function fmt(m) {
 const hhmm = t => { const d = new Date(t), h = d.getHours(); return `${h % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`; };
 const esc = s => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function why(k, c) {
-  if (k === 'hambre') return c.sinceFeed == null ? 'Aún no hay tomas registradas' : `Comió hace ${fmt(c.sinceFeed)} · suele comer cada ${fmt(c.feedLearn || c.feedInt)}${feedMax() ? ` · el pediatra dijo cada ${feedMax() % 60 ? fmt(feedMax()) : feedMax() / 60 + ' h'}` : ''}`;
+  if (k === 'hambre') return c.sinceFeed == null ? 'Aún no hay tomas registradas' : `Comió hace ${fmt(c.sinceFeed)} · suele comer cada ${fmt(c.feedLearn || c.feedInt)}${docMax() ? ` · el pediatra dijo cada ${feedMax() % 60 ? fmt(feedMax()) : feedMax() / 60 + ' h'}` : ''}`;
   if (k === 'sueno') return c.awake == null ? 'Aún no hay sueño registrado' : (c.awake === 0 ? 'Estaba dormida' : `Lleva ${fmt(c.awake)} despierta · a esta hora aguanta ~${fmt(c.wakeWin)}${sleepyNotHungry(c) ? ' · últimamente se duerme sin seno y come al despertar' : ''}`);
   if (k === 'panal') return c.sinceDiaper == null ? 'Aún no hay pañales registrados' : `Último pañal hace ${fmt(c.sinceDiaper)} · suelen cambiarla cada ~${fmt(diaperInt())}`;
   if (k === 'colico') {
@@ -790,7 +794,7 @@ function render() {
   const chip = (lab, v, alert, e, detail) => `<div class="chip ${alert ? 'alert' : ''}"><b>${fmt(v)}</b><small>${lab}</small>${by(e, detail)}</div>`;
   const ls = last('sleep'), lf = last('feed');
   $('status').innerHTML =
-    chip('🍼 desde que comió', c.sinceFeed, c.sinceFeed != null && (c.sinceFeed > c.feedInt * 0.85 || (feedMax() && c.sinceFeed >= feedMax() - 15)), lf, [feedDetail(lf), lf && feedMax() ? `toca ${hhmm(lf.t + feedMax() * 60000)}` : ''].filter(Boolean).join(' · ')) +
+    chip('🍼 desde que comió', c.sinceFeed, c.sinceFeed != null && (c.sinceFeed > c.feedInt * 0.85 || (docMax() && c.sinceFeed >= feedMax() - 15)), lf, [feedDetail(lf), lf && feedMax() && !docNight(lf.t + feedMax() * 60000) ? `toca ${hhmm(lf.t + feedMax() * 60000)}` : ''].filter(Boolean).join(' · ')) +
     (asleep() ? `<div class="chip"><b>Dormida</b><small>😴 ${fmt(mins(ls.t))}</small>${by(ls)}</div>`
               : chip('☀️ despierta', c.awake, c.awake != null && c.awake > c.wakeWin * 0.9, last('wake'))) +
     chip('🧷 desde el pañal', c.sinceDiaper, c.sinceDiaper != null && c.sinceDiaper > diaperInt(), last('diaper'), c.sincePoop != null ? `💩 hace ${fmt(c.sincePoop)}` : '');
@@ -961,21 +965,28 @@ function openFeedSheet() {
 function renderResult(cry) {
   const P = cry.pred.p, ord = KEYS.slice().sort((a, b) => P[b] - P[a]), top = ord[0], L = LABELS[top];
   const nLab = D.cries.filter(x => x.label).length;
+  // Comer y dormir: si el sueño y el hambre son las dos primeras, o si suele dormirse con el seno
+  const bp = breastPattern().R;
+  const combo = !cry.refused && (top === 'sueno' || top === 'hambre')
+    && ((ord[1] === 'sueno' || ord[1] === 'hambre') || (top === 'sueno' && (bp.rate == null || bp.n < 3 || bp.rate >= 0.5)));
   const audioNote = cry.audio ? '' : (cry.noAudio === 'silence' ? ' · no se oyó bien el llanto, usé horarios' : ' · sin audio, usé horarios');
   $('result').innerHTML = `
     <div class="top">${L.e}<b>${L.t}</b><span class="pct">${Math.round(P[top] * 100)}%</span></div>
     <p class="why">${why(top, cry.ctx)}</p>
     ${cry.refused ? `<p class="why">🙅 Rechazó el seno, así que descarté el hambre por ahora.</p>` : ''}
     <p class="tip">${L.tip}</p>
+    ${combo ? `<p class="tip">🤱😴 <b>Comer y dormir:</b> dale seno para dormirla. Muchas veces solo se duerme así, aunque no tenga tanta hambre. Si toma poquito y se duerme rápido, era más sueño que hambre.</p>` : ''}
     ${top === 'hambre' && !cry.refused ? `<button class="refuse" id="refuseBtn">🙅 Rechazó el seno</button>` : ''}
     <div class="bars">${ord.slice(1).map(k => `<div><span>${LABELS[k].e} ${LABELS[k].s}</span><i style="--w:${Math.round(P[k] * 100)}%"></i>${Math.round(P[k] * 100)}%</div>`).join('')}</div>
     <p class="learn">Aprendiendo de ${nLab} llanto${nLab === 1 ? '' : 's'} · lo aprendido pesa ${Math.round(cry.pred.w * 100)}%${audioNote}</p>
     <h3>¿Qué la calmó? (un toque)</h3>
+    ${combo || top === 'sueno' || top === 'hambre' ? `<button class="refuse" id="breastSleepBtn">🤱😴 Seno y se durmió</button>` : ''}
     <div class="labels">${KEYS.map(k => `<button data-l="${k}">${LABELS[k].e}<small>${LABELS[k].s}</small></button>`).join('')}</div>
     <button class="later" id="laterBtn">Lo marco después</button>`;
   $('result').hidden = false;
   $('result').querySelectorAll('[data-l]').forEach(b => b.onclick = () => labelCry(cry.id, b.dataset.l, true));
   $('laterBtn').onclick = () => { $('result').hidden = true; render(); };
+  if ($('breastSleepBtn')) $('breastSleepBtn').onclick = () => labelCry(cry.id, 'sueno', true, true);
   if ($('refuseBtn')) $('refuseBtn').onclick = () => refuseBreast(cry);
   $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -1003,7 +1014,9 @@ function renderPending() {
 /* ====== Etiquetar: un toque = etiqueta + registro automático ====== */
 const AUTO = { hambre: 'feed', panal: 'diaper', sueno: 'sleep' };
 const AUTO_TXT = { feed: 'Comió', diaper: 'Pañal', sleep: 'Se durmió' };
-function labelCry(id, l, fromResult) {
+/* breast: "Seno y se durmió". Aprende el llanto como SUEÑO (no hambre), registra que se durmió y,
+   si nadie registró la toma, también una toma de seno (marcada "para dormir"): sí tomó leche. */
+function labelCry(id, l, fromResult, breast = false) {
   const c = D.cries.find(x => x.id === id); if (!c) return;
   const prev = c.label || null; c.label = l; c.labeledBy = ME; persist('cries', c);
   let ev = null, re = null;
@@ -1012,10 +1025,20 @@ function labelCry(id, l, fromResult) {
     if (AUTO[l] === 'sleep') re = sleepAgain();
     if (!re) ev = addEvent(AUTO[l]);
   }
-  toast(`${LABELS[l].e} Guardado${re ? ` · se volvió a dormir ${aLos(re.m)}: sigue el mismo sueño` : ev ? ` · también registré "${AUTO_TXT[ev.type]}"` : ''}`, [
+  let fe = null, ofSnap = null;
+  if (breast && !prev && now() - c.t < 45 * 60000) {
+    const of = ongoingFeed();
+    if (of) { ofSnap = clean(of); of.toSleep = true; finishFeed(of); }
+    else if (!D.events.some(e => e.type === 'feed' && e.t >= c.t - 10 * 60000)) {
+      fe = addEvent('feed', Math.min(now() - 60000, Math.max(c.t, now() - 15 * 60000)), { mode: 'breast', toSleep: true });
+      fe.end = now(); fe.mins = Math.max(1, Math.round((fe.end - fe.t) / 60000)); persist('events', fe);
+    }
+    if (ev && ev.type === 'sleep' && fe && ev.t <= fe.end) { ev.t = fe.end + 1000; persist('events', ev); }
+  }
+  toast(`${breast ? '🤱😴 Seno y se durmió · lo aprendo como sueño' : `${LABELS[l].e} Guardado`}${breast && fe ? ' · registré la toma' : ''}${re ? ` · se volvió a dormir ${aLos(re.m)}: sigue el mismo sueño` : ev ? ` · también registré "${AUTO_TXT[ev.type]}"` : ''}`, [
     { t: 'Deshacer', fn: () => {
       const cc = D.cries.find(x => x.id === id); if (cc) { cc.label = prev; persist('cries', cc); }
-      if (ev) removeEvent(ev.id); if (re) re.undo(); render(); if (fromResult && cc) renderResult(cc);
+      if (ev) removeEvent(ev.id); if (fe) removeEvent(fe.id); if (ofSnap) restoreEvent(ofSnap); if (re) re.undo(); render(); if (fromResult && cc) renderResult(cc);
     } }
   ]);
   if (fromResult) $('result').hidden = true;
@@ -1738,7 +1761,7 @@ function openBaby() {
     <label style="display:block;margin-top:6px;color:var(--mut);font-size:14px">🍼 El pediatra dijo que coma cada…</label>
     <select id="bFeedMax">${[[0, 'Sin indicación'], [120, '2 h'], [150, '2 h 30'], [180, '3 h'], [210, '3 h 30'], [240, '4 h']]
       .map(([v, t]) => `<option value="${v}"${v === feedMax() ? ' selected' : ''}>${t}</option>`).join('')}</select>
-    <p class="note" style="margin-top:0">Se cuenta desde que empezó la toma anterior. La app te avisa lo que llegue primero: esto o lo que ella suele aguantar.</p>
+    <p class="note" style="margin-top:0">Se cuenta desde que empezó la toma anterior. La app te avisa lo que llegue primero: esto o lo que ella suele aguantar. De noche (7 pm a 6 am) no aplica: usa lo que ella suele aguantar.</p>
     <button class="big" id="bSave">Guardar</button>
     <button class="later" id="bClose">Cancelar</button></div>`;
   sh.onclick = e => { if (e.target === sh) close(); };
