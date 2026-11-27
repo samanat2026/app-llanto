@@ -9,6 +9,7 @@ PWA que sugiere por qué llora la bebé (hambre, sueño, pañal, frío/calor, ot
 - **😴 Se volvió a dormir**: si se despierta y se vuelve a dormir en menos de 15 min (sin comer en medio), es un *despertar breve*: sigue el mismo sueño, no cuenta como siesta nueva ni reinicia el tiempo despierta.
 - **Indicación del pediatra** (toca la edad de la bebé): cada cuánto debe comer (por defecto 3 h, desde que empezó la toma anterior; de 7 pm a 6 am no aplica). El chip de la toma dice a qué hora le toca y el aviso llega con lo que pase primero: esto o lo que ella suele aguantar.
 - **🤱😴 Comer y dormir**: si el llanto parece de sueño o hambre, sugiere darle seno para dormirla. El botón **Seno y se durmió** (también en Pendientes) registra que se durmió y la toma de seno, y aprende el llanto repartido entre sueño y hambre según cuánto llevaba sin comer y cuánto duró la toma.
+- **Registros incompletos** (en el Resumen del día): se marca el rato en que nadie registró. La app no aprende de lo que cruza ese rato (tomas, ventanas despierta, pañales, siestas, noches, llantos) y no inventa sueño ni vigilia dentro de él.
 - Lo que no se marque queda en **Pendientes**.
 - Todos ven lo mismo en tiempo real y quién registró cada cosa. Sin señal, se guarda y se sube después.
 

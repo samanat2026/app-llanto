@@ -82,6 +82,10 @@
   .row button,.row label,.row a{background:var(--card2);border-radius:12px;padding:10px 12px;font-size:14px;cursor:pointer;color:var(--tx);text-decoration:none}
   .danger{color:#ff8a8a!important}
   .note{font-size:12px;color:var(--mut);margin-top:10px}
+  .big.ghost{background:#2c2c3a}
+  .gapbox{margin:6px 0}.gapbox p{background:#3a2f12;border-radius:12px;padding:8px 10px;margin:6px 0;font-size:14px}.gapbox small{display:block;color:var(--mut)}
+  .gapbox summary{cursor:pointer;color:var(--mut);font-size:14px;padding:4px 0}.gaprow{display:flex;gap:8px;margin:6px 0}.gaprow label{flex:1;font-size:13px;color:var(--mut)}.gaprow input{width:100%;font-size:16px;padding:6px;border-radius:8px;border:1px solid #444;background:#1e1e28;color:inherit}.gaprow .big{flex:1;margin:0}
+  .gapbox button.link{background:none;border:0;color:#ffcf6b;text-decoration:underline;padding:4px 0;font-size:13px}
   input[type=text],.sheet select{width:100%;font:inherit;font-size:17px;padding:14px;border-radius:14px;border:1px solid #ffffff22;background:var(--card2);color:var(--tx);margin:6px 0 10px}
   .big{width:100%;padding:16px;border-radius:16px;font-size:17px;font-weight:600;background:linear-gradient(160deg,#ff7aa8,#c45ad8);color:#fff}
   .big.alt{background:var(--card2)}
@@ -497,14 +501,20 @@ function wmedian(arr) {
   for (const o of s) { acc += o.w; if (acc >= tot / 2) return o.v; }
   return s[s.length - 1].v;
 }
+/* ====== Registros incompletos ======
+   Ratos en que nadie registró (p. ej. un día de médicos): se marcan en el resumen del día.
+   La app no aprende de lo que cruza esos ratos (intervalos de tomas, ventanas despierta, pañales, siestas,
+   noches y llantos) y no inventa sueño ni vigilia dentro de ellos. */
+const gaps = () => D.events.filter(e => e.type === 'gap' && e.end > e.t);
+const inGap = (a, b) => gaps().some(g => g.t < b && g.end > a);
 function feedGaps(days = 10) {
   const f = D.events.filter(e => e.type === 'feed' && e.t > now() - days * DAY).map(e => e.t).sort((a, b) => a - b), d = [];
-  for (let i = 1; i < f.length; i++) { const v = (f[i] - f[i - 1]) / 60000; if (v >= 30 && v <= 360) d.push({ v, t: f[i - 1], w: recW(f[i - 1]) }); }
+  for (let i = 1; i < f.length; i++) { const v = (f[i] - f[i - 1]) / 60000; if (v >= 30 && v <= 360 && !inGap(f[i - 1], f[i])) d.push({ v, t: f[i - 1], w: recW(f[i - 1]) }); }
   return d;
 }
 function wakeGaps(days = 10) {
   const sp = sleepSpans().filter(s => s.a > now() - days * DAY), d = [];
-  for (let i = 1; i < sp.length; i++) { const v = (sp[i].a - sp[i - 1].b) / 60000; if (v >= 20 && v <= 240) d.push({ v, t: sp[i - 1].b, w: recW(sp[i - 1].b) }); }
+  for (let i = 1; i < sp.length; i++) { const v = (sp[i].a - sp[i - 1].b) / 60000; if (v >= 20 && v <= 240 && !sp[i - 1].cut && !inGap(sp[i - 1].b, sp[i].a)) d.push({ v, t: sp[i - 1].b, w: recW(sp[i - 1].b) }); }
   return d;
 }
 function atBlock(gaps, t, fallback) {
@@ -578,7 +588,7 @@ function getCtx() {
    Mientras no haya suficientes registros, 3 h. */
 function diaperInt() {
   const ts = D.events.filter(e => e.type === 'diaper').map(e => e.t).sort((a, b) => a - b), g = [];
-  for (let i = 1; i < ts.length; i++) { const x = (ts[i] - ts[i - 1]) / 60000; if (x >= 45 && x <= 480) g.push(x); }
+  for (let i = 1; i < ts.length; i++) { const x = (ts[i] - ts[i - 1]) / 60000; if (x >= 45 && x <= 480 && !inGap(ts[i - 1], ts[i])) g.push(x); }
   const r = g.slice(-15).sort((a, b) => a - b);
   if (r.length < 5) return 180;
   const m = r.length >> 1, med = r.length % 2 ? r[m] : (r[m - 1] + r[m]) / 2;
@@ -633,7 +643,7 @@ function ctxVec(c) {
 }
 function knn(cur) {
   const useAudio = !!cur.audio;
-  const train = D.cries.filter(c => c.label && c.ctx && LABELS[c.label] && c.id !== cur.id && (!useAudio || (c.audio && c.audio.length === cur.audio.length)));
+  const train = D.cries.filter(c => c.label && c.ctx && LABELS[c.label] && !inGap(c.t - 6 * 3600e3, c.t) && c.id !== cur.id && (!useAudio || (c.audio && c.audio.length === cur.audio.length)));
   if (train.length < 3) return null;
   const vec = c => useAudio ? ctxVec(c.ctx).concat(c.audio) : ctxVec(c.ctx);
   const X = train.map(vec), q = vec(cur), dim = q.length;
@@ -1260,7 +1270,7 @@ const dur = ms => { const m = Math.round(ms / 60000); return m < 60 ? `${m} min`
 let _spKey = '', _sp = null, _ntKey = '', _nt = null;
 function spansKey() {
   let k = 0, n = 0;
-  for (const e of D.events) if (e.type === 'sleep' || e.type === 'wake' || e.type === 'feed') { n++; k = (k * 31 + (e.t || 0) + (e.end || 0) + (e.stirs ? e.stirs.length * 7919 : 0)) % 1e15; }
+  for (const e of D.events) if (e.type === 'sleep' || e.type === 'wake' || e.type === 'feed' || e.type === 'gap') { n++; k = (k * 31 + (e.t || 0) + (e.end || 0) + (e.stirs ? e.stirs.length * 7919 : 0)) % 1e15; }
   return n + ':' + k + ':' + Math.floor(now() / 60000);
 }
 function sleepSpans() {
@@ -1299,6 +1309,12 @@ function sleepSpansRaw() {
     }
     if (cur) out.push(cur);
   }
+  // Rato sin registros: un sueño que empezó antes no se sabe cuándo terminó; se corta donde empieza el rato
+  for (const g of gaps()) for (let i = out.length - 1; i >= 0; i--) {
+    const x = out[i];
+    if (x.a < g.t && x.b > g.t) { out[i] = { ...x, b: g.t, cut: true, on: false }; }
+    else if (x.a >= g.t && x.a < g.end && x.b > g.end + 60000 && !D.events.some(e => e.type === 'sleep' && e.t === x.a)) out.splice(i, 1);
+  }
   // Despertares breves (se volvió a dormir enseguida): el sueño sigue siendo uno solo, pero se cuentan
   const stirs = [];
   for (const e of ev) if (e.type === 'sleep' && e.stirs) stirs.push(...e.stirs);
@@ -1315,7 +1331,42 @@ function awakeIntervals(d0, d1, sleeps) {
   const out = []; let cur = start;
   sleeps.forEach(s => { if (s.ca > cur) out.push({ ca: cur, cb: s.ca }); cur = Math.max(cur, s.cb); });
   if (end > cur) out.push({ ca: cur, cb: end, on: end === now() });
-  return out.filter(x => x.cb - x.ca >= 60000);
+  let res = out;
+  for (const g of gaps()) res = res.flatMap(x => g.t < x.cb && g.end > x.ca
+    ? [{ ...x, cb: Math.min(x.cb, g.t), on: false }, { ...x, ca: Math.max(x.ca, g.end) }].filter(y => y.cb > y.ca) : [x]);
+  return res.filter(x => x.cb - x.ca >= 60000);
+}
+function gapBox(R) {
+  const gs = gaps().filter(g => g.t < R.d1 && g.end > R.d0);
+  const hm = t => { const d = new Date(t); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+  const to = Math.min(R.d1 - 60000, now());
+  return `<div class="gapbox">${gs.map(g => `<p>⚠️ <b>Registros incompletos</b> de ${hhmm(Math.max(g.t, R.d0))} a ${hhmm(Math.min(g.end, R.d1))}${g.by ? ` · ${esc(g.by)}` : ''}.
+      <small>No se usan para aprender y los totales de este día no están completos.</small>
+      <button class="link" data-ungap="${g.id}">Quitar marca</button></p>`).join('')}
+    <details${gs.length ? '' : ''}><summary>${gs.length ? '➕ Marcar otro rato sin registros' : '⚠️ ¿Faltaron registros este día?'}</summary>
+      <p class="note">Marca el rato en que nadie registró (por ejemplo, si saliste y no anotaron nada). La app no aprenderá de esos datos.</p>
+      <div class="gaprow"><label>Desde <input type="time" id="gFrom" value="${hm(Math.max(R.d0, to - 4 * 3600e3))}"></label>
+      <label>Hasta <input type="time" id="gTo" value="${hm(to)}"></label></div>
+      <div class="gaprow"><button class="big" id="gSave">Marcar ese rato</button><button class="big ghost" id="gAll">Todo el día</button></div>
+    </details></div>`;
+}
+function wireGap(R) {
+  const sec = $('day');
+  const at = v => { const [h, m] = v.split(':').map(Number); const d = new Date(R.d0); d.setHours(h, m, 0, 0); return d.getTime(); };
+  const save = (a, b) => {
+    if (!(b > a)) { toast('La hora "hasta" debe ser después de "desde"'); return; }
+    const g = addEvent('gap', a, { end: Math.min(b, now()) });
+    openDay(dayOff); render();
+    toast('⚠️ Marcado: no aprendo de ese rato', [{ t: 'Deshacer', fn: () => { removeEvent(g.id); openDay(dayOff); render(); } }]);
+  };
+  const gs = sec.querySelector('#gSave'), ga = sec.querySelector('#gAll');
+  if (gs) gs.onclick = () => save(at(sec.querySelector('#gFrom').value), at(sec.querySelector('#gTo').value));
+  if (ga) ga.onclick = () => save(R.d0, Math.min(R.d1, now()));
+  sec.querySelectorAll('[data-ungap]').forEach(b => b.onclick = () => {
+    const x = D.events.find(e => e.id === b.dataset.ungap); if (!x) return;
+    const snap = { ...x }; removeEvent(x.id); openDay(dayOff); render();
+    toast('Marca quitada', [{ t: 'Deshacer', fn: () => { restoreEvent(snap); openDay(dayOff); render(); } }]);
+  });
 }
 function buildDay(off) {
   const [d0, d1] = dayBounds(off), inDay = e => e.t >= d0 && e.t < d1;
@@ -1479,6 +1530,7 @@ function openDay(off = 0) {
       <button class="icon-btn" id="dNext" aria-label="Día siguiente" ${dayOff === 0 ? 'disabled' : ''}>›</button>
       <button class="icon-btn" id="dClose" aria-label="Cerrar">✕</button>
     </div>
+    ${gapBox(R)}
     <div class="tot">
       <button data-sum="tomas"><b>${R.feeds.length}</b><small>🍼 tomas</small></button>
       <button data-sum="pecho"><b>${R.breastMin} min</b><small>🤱 de pecho</small></button>
@@ -1532,6 +1584,7 @@ function openDay(off = 0) {
     wireDp(tip, () => openDay(dayOff));
   });
   sec.querySelectorAll('[data-sum]').forEach(b => b.onclick = () => openSum(R, b.dataset.sum, dayOff));
+  wireGap(R);
   $('dPrev').onclick = () => openDay(dayOff - 1);
   $('dNext').onclick = () => openDay(dayOff + 1);
   $('dClose').onclick = () => { sec.hidden = true; };
@@ -1897,12 +1950,12 @@ function tramoOf(a) {
   return null;
 }
 function nightStats() {
-  const ns = nights().filter(n => !n.on).slice(0, 7);
+  const ns = nights().filter(n => !n.on && !inGap(n.a, n.b)).slice(0, 7);
   if (!ns.length) return { n: 0, full: 0 };
   const start = ns.reduce((x, n) => x + hourOf(n.a), 0) / ns.length;
   const stretch = ns.reduce((x, n) => x + (n.b - n.a), 0) / ns.length;
   const d = new Date(); d.setHours(0, 0, 0, 0);
-  const full = nights().map(nightFull).filter(F => F.done).slice(0, 7);
+  const full = nights().filter(n => !inGap(n.a, n.b + 6 * 3600e3)).map(nightFull).filter(F => F.done).slice(0, 7);
   const tot = full.length ? full.reduce((x, F) => x + F.total, 0) / full.length : null;
   const wk = full.length ? full.reduce((x, F) => x + F.wakes, 0) / full.length : null;
   return { n: ns.length, start: d.getTime() + start * 3600e3, stretch, full: full.length, tot, wk };
@@ -2077,7 +2130,7 @@ function learnData() {
   const byBlock = g => BLOCKS.map(B => { const x = g.filter(o => blockOf(o.t) === B); return { B, n: x.length, v: x.length >= 3 ? wmedian(x) : null }; });
   const breastMin = D.events.filter(e => e.type === 'feed' && e.mode === 'breast' && e.t >= r0).reduce((x, e) => x + (e.mins || (e.end ? (e.end - e.t) / 60000 : 0)), 0) / Math.max(1, rDays);
   // siestas: sueños que no son parte de la noche
-  const naps = sleepSpans().filter(s => !s.on && s.a >= r0 && !tramoOf(s.a) && s.b - s.a >= 15 * 60000 && s.b - s.a <= 4 * H);
+  const naps = sleepSpans().filter(s => !s.on && !s.cut && !inGap(s.a, s.b) && s.a >= r0 && !tramoOf(s.a) && s.b - s.a >= 15 * 60000 && s.b - s.a <= 4 * H);
   const cries = D.cries.map(c => c.t), lab = D.cries.filter(c => c.label && LABELS[c.label] && c.t > N - 14 * DAY);
   const labCount = {}; lab.forEach(c => labCount[c.label] = (labCount[c.label] || 0) + 1);
   const labBlock = BLOCKS.map(B => { const x = lab.filter(c => blockOf(c.t) === B), cnt = {}; x.forEach(c => cnt[c.label] = (cnt[c.label] || 0) + 1);
