@@ -468,6 +468,9 @@ async function initCloud(code) {
 /* ====== Eventos ====== */
 function addEvent(type, t = now(), extra = {}) { const e = { id: uid(), type, t, by: ME, ...extra }; D.events.push(e); persist('events', e); return e; }
 function removeEvent(id) { D.events = D.events.filter(e => e.id !== id); unpersist('events', id); }
+/* "Fue antes": cada toque corre el registro 15 min y el botón dice a qué hora quedaría (11:15, 11:00…) */
+const shiftLabel = t => `⏪ Fue a las ${hhmm(t - 15 * 60000)}`;
+const backTxt = (t, back) => `a las ${hhmm(t)} (hace ${back} min)`;
 function shiftEvent(id, minutes) {
   const e = D.events.find(x => x.id === id); if (!e) return;
   e.t -= minutes * 60000; persist('events', e);
@@ -1162,9 +1165,9 @@ function quickLog(type, label, extra = {}, t = now(), allowShift = true, w = nul
   render();
   const acts = [{ t: 'Deshacer', fn: () => { removeEvent(e.id); if (w) removeEvent(w.id); if (sl) removeEvent(sl.id); render(); } }];
   if (w) acts.push({ t: '😴 Se volvió a dormir', keep: true, fn: () => { const z = sl = addEvent('sleep'); render(); toast('😴 Se volvió a dormir · registrado', [{ t: 'Deshacer', fn: () => { removeEvent(z.id); render(); } }]); } });
-  const txt = () => `${label}${type === 'feed' && isFussy(e.id) ? ' · 😣 inquieta' : ''}${back ? ` · hace ${back} min` : ''}`;
-  if (type === 'feed') acts.push(fussyAct(e.id, () => label + (back ? ` · hace ${back} min` : '')));
-  if (allowShift) acts.push({ t: 'Fue hace 15 min', keep: true, fn: span => { shiftEvent(e.id, 15); if (w) shiftEvent(w.id, 15); back += 15; render(); span.textContent = txt(); } });
+  const txt = () => `${label}${type === 'feed' && isFussy(e.id) ? ' · 😣 inquieta' : ''}${back ? ` · ${backTxt(e.t, back)}` : ''}`;
+  if (type === 'feed') acts.push(fussyAct(e.id, () => label + (back ? ` · ${backTxt(e.t, back)}` : '')));
+  if (allowShift) acts.push({ label: () => shiftLabel(e.t), keep: true, fn: span => { shiftEvent(e.id, 15); if (w) shiftEvent(w.id, 15); back += 15; render(); span.textContent = txt(); } });
   toast(`${label} · registrado`, acts);
 }
 /* Toma inquieta: se marca con un toque en el aviso de la toma o después en el cronograma */
@@ -1181,11 +1184,11 @@ document.querySelectorAll('[data-ev]').forEach(b => b.onclick = () =>
 function logDiaper() {
   const e = addEvent('diaper'); let back = 0;
   render();
-  const txt = () => { const x = D.events.find(y => y.id === e.id); return `🧷 Pañal${x && x.poop ? ' · 💩 con popó' : ''}${back ? ` · hace ${back} min` : ''}`; };
+  const txt = () => { const x = D.events.find(y => y.id === e.id); return `🧷 Pañal${x && x.poop ? ' · 💩 con popó' : ''}${back ? ` · ${backTxt(e.t, back)}` : ''}`; };
   toast(`${txt()} · registrado`, [
     { t: 'Deshacer', fn: () => { removeEvent(e.id); render(); } },
     { t: '💩 Hubo popó', keep: true, fn: span => { const x = D.events.find(y => y.id === e.id); if (!x) return; x.poop = !x.poop; persist('events', x); render(); span.textContent = txt(); } },
-    { t: 'Fue hace 15 min', keep: true, fn: span => { shiftEvent(e.id, 15); back += 15; render(); span.textContent = txt(); } }
+    { label: () => shiftLabel(e.t), keep: true, fn: span => { shiftEvent(e.id, 15); back += 15; render(); span.textContent = txt(); } }
   ]);
 }
 $('learnBtn').onclick = openLearn;
@@ -1256,8 +1259,8 @@ function toast(text, actions = []) {
   const span = document.createElement('span'); span.textContent = text; el.appendChild(span);
   const arm = () => { clearTimeout(toastTimer); toastTimer = setTimeout(() => el.hidden = true, 7000); };
   actions.forEach(a => {
-    const b = document.createElement('button'); b.textContent = a.t;
-    b.onclick = () => { a.fn(span); if (!a.keep) el.hidden = true; else arm(); };
+    const b = document.createElement('button'); b.textContent = a.label ? a.label() : a.t;
+    b.onclick = () => { a.fn(span); if (a.label) b.textContent = a.label(); if (!a.keep) el.hidden = true; else arm(); };
     el.appendChild(b);
   });
   arm();
