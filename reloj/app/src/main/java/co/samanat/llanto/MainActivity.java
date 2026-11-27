@@ -419,6 +419,8 @@ public class MainActivity extends Activity {
         ex.execute(() -> {
             try {
                 fb.ensureAuth();
+                // Si todavía no había cargado los registros, se cargan antes de guardar (para saber si estaba dormida, etc.)
+                if (!loaded) { evs = fb.eventsSince(fam, System.currentTimeMillis() - 36 * 60 * MIN); loaded = true; loadedAt = System.currentTimeMillis(); }
                 op.run();
                 h.post(() -> {
                     busy = false;

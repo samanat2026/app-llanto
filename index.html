@@ -559,6 +559,15 @@ function ctxAt(t) {
   try { NOW_AT = t; D.events = evs.filter(e => e.t <= t); return getCtx(); }
   finally { NOW_AT = null; D.events = evs; }
 }
+/* Si alguien empezó una toma estando dormida y no quedó el "se despertó" (p. ej. desde el reloj sin señal),
+   se agrega solo: para comer tuvo que despertarse. Solo tomas de las últimas 6 h. */
+function healFeedWakes() {
+  const recent = D.events.filter(e => e.type === 'feed' && now() - e.t < 6 * 3600e3 && e.t <= now());
+  for (const f of recent) {
+    const before = D.events.filter(e => (e.type === 'sleep' || e.type === 'wake') && e.t <= f.t + 30000).sort((a, b) => b.t - a.t)[0];
+    if (before && before.type === 'sleep' && before.t < f.t) addEvent('wake', f.t, { auto: 'feed' });
+  }
+}
 function fillWatchCries() {
   if (!D.events.length) return;
   for (const c of D.cries) if (c.src === 'reloj' && !c.ctx && now() - c.t < 48 * 3600e3) {
@@ -810,7 +819,7 @@ function why(k, c) {
 /* ====== Pantalla ====== */
 let currentCryId = null;
 function render() {
-  fillWatchCries();
+  fillWatchCries(); healFeedWakes();
   if ($('app').hidden) return;
   const c = getCtx();
   const by = (e, detail = '') => {
